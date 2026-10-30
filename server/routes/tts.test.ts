@@ -42,10 +42,12 @@ describe("voice routes", () => {
     }
   });
 
-  it("list no voices, and say why, when no voice provider is set up", async () => {
+  it("lists the Gemini voice catalog without claiming a key is configured", async () => {
     const { answers } = await call("GET", "/api/tts/voices?q=calm");
     expect(answers).toHaveLength(1);
     expect(answers[0]![0]).toBe(200);
-    expect((answers[0]![1] as { voices: unknown[] }).voices).toEqual([]);
+    expect((answers[0]![1] as { voices: unknown[] }).voices.length).toBeGreaterThan(0);
+    const prepared = await call("POST", "/api/tts/prepare", { text: "Hello" });
+    expect((prepared.answers[0]![1] as { ready: boolean }).ready).toBe(false);
   });
 });

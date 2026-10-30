@@ -27,13 +27,13 @@ import { readPublishedLibrary, writePublishedLibrary, type DefaultsPreset } from
 import { scoutProject, suggestTeam } from "../project-scout.ts";
 import { readPublishedTeam, writePublishedTeam } from "../published-teams.ts";
 import type { RoutineManager } from "../routines.ts";
+import type { RequestAuth } from "../request-auth.ts";
 import { readSectionContext } from "../section-context.ts";
 import { sectionKey, type BotRecord, type GroupRecord, type Store } from "../store.ts";
 import { createTeamBackup, importTeamBackup } from "../team-backup.ts";
 import { fetchGithubTeam, fetchGrokTemplateCard, fetchLibraryTeam, fetchTeamCatalog } from "../team-library.ts";
 import { createTeamManifest, parseTeamManifest } from "../team-manifest.ts";
 import { CursorFallback, defaultCursorSession, type CursorSession } from "../cursor-session.ts";
-import type { RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 
 export interface TeamRouteDeps {
@@ -56,6 +56,7 @@ export interface TeamRouteDeps {
   collectTeamSkills(bots: readonly BotRecord[], selection: unknown):
     | { ok: true; all: boolean; skillsByBot: Map<string, ExportablePackageSkill[]>; skipped: TeamExportSkip[]; available: string[] }
     | { ok: false; error: string; available: string[] };
+  profileName?(auth: RequestAuth): string | undefined;
   /** The optional Cursor sign-in behind the one-click Grok Bot import; the app's own by default. */
   cursor?: () => CursorSession;
   /** On a Team Cloud: false for someone else's private chat, which a team backup never carries. */

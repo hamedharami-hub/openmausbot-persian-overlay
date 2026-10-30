@@ -257,8 +257,20 @@ describe("surface parsing", () => {
 });
 
 it("does not instruct use of a selected browser when no surface is mounted", () => {
-  expect(surfacePrompt({ computer: null, browser: false }, { canSelect: true })).not.toContain("For online research");
-  expect(surfacePrompt({ computer: null, browser: true })).toContain("For online research");
+  const text = surfacePrompt({ computer: null, browser: false }, { canSelect: true });
+  expect(text).not.toContain("Use the selected OpenMausBot browser");
+  expect(text).toContain("prefer the current engine's native web-search tool when it is actually available");
+  expect(text).toContain("report when no suitable web tool is available");
+  expect(surfacePrompt({ computer: null, browser: true })).toContain("For a quick web lookup");
+});
+
+it("prefers engine-native search for quick lookups and reserves the interactive browser for when needed", () => {
+  const text = surfacePrompt({ computer: null, browser: true });
+  expect(text).toContain("Do not open or call the browser for ordinary chat or because it happens to be mounted");
+  expect(text).toContain("prefer the current engine's native web-search tool when it is actually available");
+  expect(text).toContain("prefer its native web-fetch/page-reading tool when available");
+  expect(text).toContain("Use the selected OpenMausBot browser when native search or reading is unavailable or insufficient");
+  expect(text).toContain("sign-in, JavaScript, visual inspection, a form, or other interaction");
 });
 
 describe("cloudPlaceRefusal", () => {

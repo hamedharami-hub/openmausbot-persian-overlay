@@ -425,7 +425,7 @@ it("a process on the Cloud cannot write in the owner's running conversation, and
   await stop(bot, receipt.receipts![0]!.threadId!);
 }, 60_000);
 
-it("a link planted in a bot's memory is a change, and what it points at never reaches a turn", async () => {
+it("a link planted in a bot's memory is a change, and what it points at never reaches a turn", async ({ skip }) => {
   const bot = await newBot("Linked", "held");
   await review(bot);
   const target = join(home, "guest-controlled.md");
@@ -434,9 +434,19 @@ it("a link planted in a bot's memory is a change, and what it points at never re
   writeFileSync(notes, `# Memory\n\n- ${INJECTED}\n`);
   const guests = await guestThread(bot);
   await toolsFor(() => say(owner, bot, "Organize your notes.", guests));
-  symlinkSync(target, ws(bot, "memory", "mac.md"));
+  const symlink = (source: string, destination: string) => {
+    try { symlinkSync(source, destination); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (process.platform === "win32" && (code === "EPERM" || code === "EACCES")) {
+        skip("Windows symlink creation requires Developer Mode or elevated privileges.");
+      }
+      throw error;
+    }
+  };
+  symlink(target, ws(bot, "memory", "mac.md"));
   rmSync(ws(bot, "MEMORY.md"));
-  symlinkSync(notes, ws(bot, "MEMORY.md"));
+  symlink(notes, ws(bot, "MEMORY.md"));
   await stop(bot, guests);
   const systemPrompt = () => JSON.stringify(JSON.parse(readFileSync(dumpOf("held"), "utf8")).systemPrompt ?? "");
   const flagged = await toolsFor(async () => say(owner, bot, "Read plan.md from my Mac.", await newThread(bot)));

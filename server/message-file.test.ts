@@ -318,7 +318,7 @@ describe("message-linked files", () => {
     await expect(openMessageFile(large, [workspace])).rejects.toMatchObject({ status: 413 });
   });
 
-  it("refuses traversal and a symlink that resolves outside the allowed root", async () => {
+  it.skipIf(process.platform === "win32")("refuses traversal and a symlink that resolves outside the allowed root", async () => {
     const secret = join(outside, "secret.md");
     writeFileSync(secret, "not for this conversation");
     symlinkSync(secret, join(workspace, "escape.md"));
@@ -372,7 +372,7 @@ describe("message-linked files", () => {
     expect(messageFolderEntryName("a.md")).toBe("a.md");
   });
 
-  it("refuses a folder outside the root and leaves out symlinks that escape it", async () => {
+  it.skipIf(process.platform === "win32")("refuses a folder outside the root and leaves out symlinks that escape it", async () => {
     writeFileSync(join(outside, "secret.md"), "not for this conversation");
     const refusal = { status: 403, code: "outside_workspace" };
     await expect(listMessageFolder(outside, [workspace])).rejects.toMatchObject(refusal);

@@ -24,7 +24,8 @@ import type { MemoryUpkeep } from "../memory-upkeep.ts";
 import { phoneAppsFor } from "../phones/access.ts";
 import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
-import { clientBotPatchViolation, requestSource } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
+import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
+import { clientBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts";
 import type { RoutineManager } from "../routines.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import { parseConnectorTools } from "../connector-tools.ts";
@@ -59,6 +60,7 @@ export interface BotPatchRouteDeps {
   audienceChanged(): void;
   storedAvatarExists(avatarUrl: string): boolean;
   requestedTaskBot(botId: string, rawThreadId: unknown): BotRecord;
+  threadVisible?(auth: RequestAuth, threadId: string): boolean;
   threadBusy(botId: string, threadId: string): boolean;
   activeGroupTurnForBot(botId: string): { group: GroupRecord; threadId: string } | null;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
@@ -84,6 +86,7 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
   const pinnedClientThread = pinnedClientThreadGuard(store);
   return async ({ req, res, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
+    const threadVisible = (threadId: string) => deps.threadVisible?.(auth, threadId) ?? true;
     const routines = deps.routines();
     const requirePinnedClientThread = pinnedClientThread(auth, req);
     m = path.match(/^\/api\/bots\/([\w-]+)$/);
@@ -121,6 +124,9 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       }
       if (rawSelection !== undefined) requirePinnedClientThread(m[1], body.threadId);
       const selectedTask = existingBot ? requestedTaskBot(existingBot.id, body.threadId) : null;
+      if (rawSelection !== undefined && selectedTask && !threadVisible(selectedTask.threadId)) {
+        return json(res, 404, { error: "no such conversation" });
+      }
       const beforeProfile = existingBot ? profileSnapshot(existingBot) : undefined;
       const beforeVisibility = existingBot?.visibility;
       if (body.requireAvailableModel !== undefined && typeof body.requireAvailableModel !== "boolean") {
@@ -208,18 +214,33 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (section !== undefined) patch.section = section ?? undefined;
       if (body.chiefOfStaff === false) patch.chiefOfStaff = false;
       if (body.fallback !== undefined) {
-        if (!Array.isArray(body.fallback) || body.fallback.length > 5) {
-          return json(res, 400, { error: "fallback must be a list of up to five { instanceId, model } entries" });
+        const previous = existingBot?.fallback ?? [];
+        const legacyFiveRetained = Array.isArray(body.fallback) && body.fallback.length === 5 &&
+          body.fallback.every((entry: unknown) => entry && typeof entry === "object" &&
+            previous.some(old => old.instanceId === (entry as { instanceId?: unknown }).instanceId && old.model === (entry as { model?: unknown }).model));
+        if (!Array.isArray(body.fallback) || (body.fallback.length > 4 && !legacyFiveRetained)) {
+          return json(res, 400, { error: "fallback must be a list of up to four { instanceId, model } entries" });
         }
         const chain: Array<{ instanceId: string; model: string }> = [];
         for (const entry of body.fallback as unknown[]) {
           const row = entry && typeof entry === "object" ? (entry as { instanceId?: unknown; model?: unknown }) : null;
           if (!row || typeof row.instanceId !== "string" || !/^[\w.-]+$/.test(row.instanceId) || typeof row.model !== "string" || !row.model.trim() || row.model.length > 500) {
-            return json(res, 400, { error: "fallback must be a list of up to five { instanceId, model } entries" });
+            return json(res, 400, { error: "fallback must be a list of up to four { instanceId, model } entries" });
           }
-          if (!registry.get(row.instanceId)) return json(res, 400, { error: `fallback engine "${row.instanceId}" is not available` });
-          if (chain.some((seen) => seen.instanceId === row.instanceId)) continue;
-          chain.push({ instanceId: row.instanceId, model: row.model.trim() });
+          const instanceId = row.instanceId;
+          const model = row.model.trim();
+          if (chain.some((seen) => seen.instanceId === instanceId && seen.model === model)) {
+            return json(res, 400, { error: "fallback entries must use unique instanceId and model pairs" });
+          }
+          const normalized = { instanceId, model };
+          if (!registry.get(normalized.instanceId)) return json(res, 400, { error: `fallback engine "${normalized.instanceId}" is not available` });
+          const checked = checkedModelSelection(normalized, undefined, true);
+          if (!checked.ok) return json(res, checked.status, { error: checked.error });
+          const primary = normalizedSelection ?? existingBot?.modelSelection;
+          if (primary?.instanceId === normalized.instanceId && primary.model === normalized.model) {
+            return json(res, 400, { error: "a fallback model must differ from the bot's primary model" });
+          }
+          chain.push(normalized);
         }
         patch.fallback = chain;
       }

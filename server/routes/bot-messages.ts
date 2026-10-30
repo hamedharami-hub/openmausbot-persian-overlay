@@ -71,6 +71,7 @@ export interface BotMessageRouteDeps {
     guardedStart?: (currentAtStart: BotRecord) => Promise<DirectSendReceipt>,
   ): Promise<DirectSendReceipt>;
   directSendRefusal(botId: string, threadId: string): { status: number; body: Record<string, unknown> } | null;
+  threadVisible?(auth: RequestAuth, threadId: string): boolean;
   startTurn(botId: string, text: string, opts?: {
     threadId?: string; replyTo?: Message; sendId?: string; sender?: ResolvedSender; trigger?: UsageTrigger; relayed?: boolean;
     dataContext?: DataContext; compactOnly?: boolean; cardContinuation?: boolean; editedMessageId?: string;
@@ -172,6 +173,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
   const route: RouteHandler = async (ctx) => {
     const { req, res, path, method, auth, json, readBody } = ctx;
     let m: RegExpMatchArray | null = null;
+    const threadVisible = (threadId: string) => deps.threadVisible?.(auth, threadId) ?? true;
     const requirePinnedClientThread = pinnedClientThread(auth, req);
     const routines = deps.routines();
     m = path.match(/^\/api\/bots\/([\w-]+)\/messages(?:\/(guarded))?$/);
@@ -209,6 +211,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
         return json(res, 400, { error: "threadId must be a task id" });
       }
       const threadId = body.threadId ?? bot.threadId;
+      if (!threadVisible(threadId)) return json(res, 404, { error: "no such conversation" });
       const notYours = cloudGuestSendRefusal(auth, threadId);
       if (notYours) return json(res, 403, { error: notYours });
       if (body.mode !== undefined && body.mode !== "chat" && body.mode !== "goal") return json(res, 400, { error: "mode must be chat or goal" });
@@ -326,6 +329,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     m = path.match(/^\/api\/bots\/([\w-]+)\/queue\/([\w-]+)$/);
     if (m && method === "DELETE") {
       const body = await readBody(req);
+      if (typeof body?.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       requirePinnedClientThread(m[1], body?.threadId);
       const bot = requestedTaskBot(m[1], body?.threadId);
       const queueId = m[2];
@@ -340,6 +344,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     m = path.match(/^\/api\/bots\/([\w-]+)\/queue\/([\w-]+)\/steer$/);
     if (m && method === "POST") {
       const body = await readBody(req);
+      if (typeof body?.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       requirePinnedClientThread(m[1], body?.threadId);
       const bot = requestedTaskBot(m[1], body?.threadId);
       // Hold the whole queue atomically: a racing settle drains it or this request steers it, never both.
@@ -428,6 +433,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     m = path.match(/^\/api\/bots\/([\w-]+)\/compact$/);
     if (m && method === "POST") {
       const body = await readBody(req);
+      if (typeof body?.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       requirePinnedClientThread(m[1], body?.threadId);
       const bot = requestedTaskBot(m[1], body?.threadId);
       const notYours = cloudThreadRefusal(auth, bot.threadId);
@@ -442,6 +448,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     if (m && method === "POST") {
       const messageId = m[2];
       const body = await readBody(req);
+      if (typeof body.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       requirePinnedClientThread(m[1], body?.threadId);
       const bot = requestedTaskBot(m[1], body.threadId);
       const notYours = cloudThreadRefusal(auth, bot.threadId);
@@ -487,6 +494,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     m = path.match(/^\/api\/bots\/([\w-]+)\/active-branch$/);
     if (m && method === "POST") {
       const body = await readBody(req);
+      if (typeof body.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       requirePinnedClientThread(m[1], body?.threadId);
       const bot = requestedTaskBot(m[1], body.threadId);
       const notYours = cloudThreadRefusal(auth, bot.threadId);
@@ -503,6 +511,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
     m = path.match(/^\/api\/bots\/([\w-]+)\/respond$/);
     if (m && method === "POST") {
       const body = await readBody(req);
+      if (typeof body.threadId === "string" && !threadVisible(body.threadId)) return json(res, 404, { error: "no such conversation" });
       const selected = requestedTaskBot(m[1], body.threadId);
       const answering = answeredIn(selected.threadId, String(body.requestId));
       if (answering !== selected.threadId && !store.taskByThread(selected.id, answering)) {
@@ -714,6 +723,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       if (body.turnId !== undefined && (!turnId || turnId.length > 200)) {
         return json(res, 400, { error: "turnId must name a turn" });
       }
+      if (typeof expectedThreadId === "string" && !threadVisible(expectedThreadId)) return json(res, 404, { error: "no such conversation" });
       if (typeof expectedThreadId === "string" && store.taskByThread(bot.id, expectedThreadId)) {
         if (!stopReachesLiveTurn(turnId, liveTurn(expectedThreadId))) return json(res, 200, { ok: true, outcome: "already-stopped" });
         await stopThreadForPerson(bot.id, expectedThreadId);

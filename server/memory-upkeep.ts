@@ -51,7 +51,9 @@ export interface UpkeepDeps {
   bot: (id: string) => UpkeepBot | undefined;
   engine: (botId: string) => UpkeepEngine | null;
   busy: (botId: string) => boolean;
-  addToAboutMe: (from: { botId: string; botName: string }, texts: readonly string[]) => number;
+  addToAboutMe: (from: { botId: string; botName: string }, texts: readonly string[], threadId?: string) => number;
+  /** Returns null for shared/ambiguous threads, undefined for the legacy single profile, or an account scope. */
+  forgottenScopeForThread?: (threadId: string) => string | null | undefined;
   sourceLabel: (botId: string, threadId: string) => string;
   /** Asked again at capture, so a turn queued before a visibility change is dropped. */
   mayCapture?: (botId: string, threadId: string) => boolean;
@@ -302,8 +304,10 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
   function fileCandidates(botId: string, candidates: readonly Candidate[], filed: { source: string; via: string; threadId?: string }): { added: number; topics: number; kept: { text: string; where: string }[] } {
     const before = readRaw(botId, "MEMORY.md");
     const archiveBefore = readRaw(botId, ARCHIVE_PATH);
-    const fresh = newCandidates(candidates, before ?? "").filter((candidate) => !isForgotten(candidate.text));
     const { source, via, threadId } = filed;
+    const forgottenScope = threadId ? deps.forgottenScopeForThread?.(threadId) : undefined;
+    const fresh = newCandidates(candidates, before ?? "").filter((candidate) =>
+      forgottenScope !== null && !isForgotten(candidate.text, forgottenScope));
     const kept: { text: string; where: string }[] = [];
     let added = 0;
     const byTopic = new Map<string, Candidate[]>();
@@ -415,7 +419,9 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
     if (!still.some(Boolean)) return refused;
     const filed = attribute(parseCandidates(answer, today, captureItemLimit(conversations.length)), conversations, still).flatMap((item) => {
       const turns = conversations[item.at]!.turns;
-      if (isForgotten(item.candidate.text) || !statedInConversation(item.candidate, turns, false)) return [];
+      const threadId = conversations[item.at]!.threadId;
+      const forgottenScope = deps.forgottenScopeForThread?.(threadId);
+      if ((forgottenScope !== null && isForgotten(item.candidate.text, forgottenScope)) || !statedInConversation(item.candidate, turns, false)) return [];
       return [{ ...item, aboutMe: item.aboutMe && statedInConversation(item.candidate, turns, true) }];
     });
     const { added, topics } = writing(id, () => {
@@ -430,9 +436,12 @@ export function createMemoryUpkeep(deps: UpkeepDeps): MemoryUpkeep {
       });
       return { added, topics };
     });
-    const learned = filed.filter((item) => item.aboutMe).map((item) => item.candidate.text);
-    const aboutMe = learned.length ? deps.addToAboutMe({ botId: id, botName: bot.name }, learned) : 0;
-    const organized = await organize(id);
+    let aboutMe = 0;
+    conversations.forEach((conversation, index) => {
+      const learned = filed.filter((item) => item.aboutMe && item.at === index).map((item) => item.candidate.text);
+      if (learned.length) aboutMe += deps.addToAboutMe({ botId: bot.id, botName: bot.name }, learned, conversation.threadId);
+    });
+    const organized = await organize(bot.id);
     const report: CaptureReport = { at, added, topics, aboutMe, organized };
     if (cancelled(started)) return report;
     record(id, { lastCapture: report });

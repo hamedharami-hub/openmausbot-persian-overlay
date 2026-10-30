@@ -163,6 +163,8 @@ export interface WireTask extends InboxTask {
   /** The thread's own model when a person picked one in it, else its bot's.
    * Always the effective one on the wire. */
   modelSelection?: ModelSelection;
+  /** Thread-only automatic-recovery override. Missing follows the bot; [] skips the bot chain. */
+  fallback?: Array<{ instanceId: string; model: string }>;
   /** true: the thread runs on its bot's model and moves with it; false: a
    * person picked this thread's model. Derived at projection, never stored. */
   followsBotModel?: boolean;
@@ -457,6 +459,8 @@ export interface WireMessage extends HelperIntroField, SetupCardFields, WaitLine
     tokensBefore: number;
     by: "person" | "harness";
   };
+  /** A shared importance mark, independent of reactions and the single pinned banner. */
+  important?: boolean;
   /** Renderers receive only the allowlisted /api/attachments URL. `file`
    * entries are opened through the message-scoped file route, never by path. */
   attachments?: Array<
@@ -857,6 +861,8 @@ export interface WireGroup {
   tasks?: GroupTask[];
   name: string;
   memberIds: string[];
+  /** Per-member model in this room only; an omitted member follows its bot default. */
+  memberModels?: Record<string, ModelSelection>;
   defaultResponder: GroupDefaultResponder;
   /** The room's shared instructions. */
   bulletin: string;

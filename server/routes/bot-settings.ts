@@ -37,6 +37,7 @@ export interface BotSettingsRouteDeps {
   cloudOwnerSession(auth: RequestAuth): boolean;
   storedAvatarExists(avatarUrl: string): boolean;
   requestedTaskBot(botId: string, rawThreadId: unknown): BotRecord;
+  threadVisible?(auth: RequestAuth, threadId: string): boolean;
   threadBusy(botId: string, threadId: string): boolean;
   activeGroupTurnForBot(botId: string): { group: GroupRecord; threadId: string } | null;
   checkedModelSelection(raw: unknown, current?: { selection: ModelSelection; busy: boolean }, requireAvailableModel?: boolean): ModelSelectionCheck;
@@ -60,6 +61,7 @@ export function createBotSettingsRoutes(deps: BotSettingsRouteDeps): RouteHandle
   const pinnedClientThread = pinnedClientThreadGuard(store);
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
+    const threadVisible = (threadId: string) => deps.threadVisible?.(auth, threadId) ?? true;
     const requirePinnedClientThread = pinnedClientThread(auth, req);
     m = path.match(/^\/api\/bots\/([\w-]+)\/avatar\/generate$/);
     if (m && method === "POST") {
@@ -128,6 +130,7 @@ export function createBotSettingsRoutes(deps: BotSettingsRouteDeps): RouteHandle
       if (!existing) return json(res, 404, { error: "no such bot" });
       requirePinnedClientThread(existing.id, undefined);
       const selected = requestedTaskBot(existing.id, undefined);
+      if (!threadVisible(selected.threadId)) return json(res, 404, { error: "no such conversation" });
       if (existing.approvalGrant) {
         return json(res, 409, { error: "wait for the approval-level change to finish before changing models" });
       }
@@ -161,6 +164,7 @@ export function createBotSettingsRoutes(deps: BotSettingsRouteDeps): RouteHandle
       const body = await readBody(req);
       requirePinnedClientThread(m[1], body?.threadId);
       const current = requestedTaskBot(m[1], body?.threadId);
+      if (!threadVisible(current.threadId)) return json(res, 404, { error: "no such conversation" });
       sawThread(current.threadId);
       deps.threadRead?.(auth, current.threadId);
       store.patchTask(current.id, current.threadId, { unread: false, ...readCursor(current.threadId) });
@@ -197,6 +201,7 @@ export function createBotSettingsRoutes(deps: BotSettingsRouteDeps): RouteHandle
       requirePinnedClientThread(m[1], body?.threadId);
       const allowKey = typeof body.allowKey === "string" ? body.allowKey : "";
       const bot = requestedTaskBot(m[1], body.threadId);
+      if (!threadVisible(bot.threadId)) return json(res, 404, { error: "no such conversation" });
       if (!allowKey) return json(res, 400, { error: "allowKey required" });
       const pending = store.messagesFor(bot.threadId).find((message) =>
         message.card?.requestId &&

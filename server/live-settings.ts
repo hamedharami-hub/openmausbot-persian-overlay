@@ -12,11 +12,17 @@ export function liveCallKey(cfg: Pick<AppConfig, "live" | "openai">): { key: str
 
 export function liveSettingsFor(cfg: AppConfig): LiveSettings {
   const minutes = cfg.live?.idleMinutes;
-  const key = liveCallKey(cfg);
+  const provider = cfg.live?.provider === "gemini" ? "gemini" : "openai";
+  const key = provider === "gemini"
+    ? (cfg.gemini?.apiKey?.trim() ? { source: "gemini" as const } : null)
+    : liveCallKey(cfg);
   return {
     configured: key !== null,
+    provider,
+    geminiConfigured: Boolean(cfg.gemini?.apiKey?.trim()),
     ...(key ? { keySource: key.source } : {}),
     voice: cfg.live?.voice ?? "",
+    geminiVoice: cfg.live?.geminiVoice ?? "Kore",
     readTypedReplies: cfg.live?.readTypedReplies ?? true,
     idleMinutes: Number.isInteger(minutes) && minutes! >= 1 && minutes! <= 60 ? minutes! : LIVE_IDLE_MINUTES_DEFAULT,
   };

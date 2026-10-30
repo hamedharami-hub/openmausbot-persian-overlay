@@ -33,14 +33,10 @@ function write(next: Preferences): void {
   }
 }
 
-export function localSystemVoicesAvailable(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.ogb?.remoteClient?.active === true &&
-    window.ogb?.platform === "darwin" &&
+export function localDeviceVoicesAvailable(): boolean {
+  return typeof window !== "undefined" &&
     typeof window.speechSynthesis !== "undefined" &&
-    typeof window.SpeechSynthesisUtterance !== "undefined"
-  );
+    typeof window.SpeechSynthesisUtterance !== "undefined";
 }
 
 export function remoteVoiceProvider(): RemoteVoiceProvider {
@@ -68,9 +64,11 @@ export function setRemoteSystemVoice(botId: string, voiceId: string): void {
   });
 }
 
-export function localSystemVoiceActive(): boolean {
-  return localSystemVoicesAvailable() && remoteVoiceProvider() === "system";
+export function localDeviceVoiceActive(): boolean {
+  return localDeviceVoicesAvailable() && remoteVoiceProvider() === "system";
 }
+
+export const localSystemVoiceActive = localDeviceVoiceActive;
 
 export type LocalSystemVoice = {
   id: string;
@@ -78,8 +76,8 @@ export type LocalSystemVoice = {
   description?: string;
 };
 
-export function listLocalSystemVoices(): LocalSystemVoice[] {
-  if (!localSystemVoicesAvailable()) return [];
+export function listLocalDeviceVoices(): LocalSystemVoice[] {
+  if (!localDeviceVoicesAvailable()) return [];
   return window.speechSynthesis.getVoices().map((voice) => ({
     id: voice.voiceURI,
     label: voice.name,
@@ -87,8 +85,8 @@ export function listLocalSystemVoices(): LocalSystemVoice[] {
   }));
 }
 
-export function resolveLocalSystemVoice(voiceId: string): SpeechSynthesisVoice | null {
-  if (!localSystemVoicesAvailable() || !voiceId) return null;
+export function resolveLocalDeviceVoice(voiceId: string): SpeechSynthesisVoice | null {
+  if (!localDeviceVoicesAvailable() || !voiceId) return null;
   return (
     window.speechSynthesis
       .getVoices()

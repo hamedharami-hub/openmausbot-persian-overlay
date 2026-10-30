@@ -103,7 +103,7 @@ export function createDefaultBot(store: DefaultBotStore, options: { person?: str
  * install's own adopted, or a new one. A MausBot that is gone is never made again. Two marked ones keep the oldest. A
  * place with no Chief of Staff at all gets MausBot as its Chief, so someone keeps an eye on the day; one that has a
  * Chief keeps it. */
-export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: string; person?: string; team?: string | null }): BotRecord | null {
+export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: string; person?: string; team?: string | null; createMissing?: boolean }): BotRecord | null {
   const person = options.person?.trim().toLowerCase() ?? "";
   const marked = store.bots.filter((bot) => bot.defaultBot && defaultBotPerson(bot) === person)
     .sort((a, b) => a.createdAt - b.createdAt);
@@ -114,6 +114,8 @@ export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: str
   }
   if (Object.hasOwn(ledger(options.dataDir), person)) return null;
   const adoptable = person ? undefined : seededMausBot(store.bots);
+  // Operators upgrading an existing workspace may preserve their chosen fleet instead of adding a helper.
+  if (!adoptable && options.createMissing === false) return null;
   const chief = !person && !store.bots.some((bot) => bot.chiefOfStaff && !bot.hidden) ? (id: string) => store.setChiefOfStaff(id) : undefined;
   let bot: BotRecord;
   if (adoptable) {

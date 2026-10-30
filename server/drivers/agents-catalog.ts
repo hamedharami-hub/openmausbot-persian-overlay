@@ -186,6 +186,24 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "propose_project_task",
+    description: "Propose work for this linked project. It stays pending until the chief or person decides; it never starts work. Reuse request_id on retries.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {
+      title: { type: "string" },
+      request_id: { type: "string" },
+    }, required: ["title", "request_id"] },
+  },
+  {
+    name: "decide_project_task",
+    description: "Chief only in your linked project chat: decide a pending task using its id and current revision. Acceptance adds it to the board; it never starts work.",
+    inputSchema: { type: "object", additionalProperties: false, properties: {
+      project_id: { type: "string" },
+      task_id: { type: "string" },
+      expected_revision: { type: "integer", minimum: 0 },
+      accept: { type: "boolean" },
+    }, required: ["project_id", "task_id", "expected_revision", "accept"] },
+  },
+  {
     name: "tool_result_read",
     description: "Read a missing portion of an oversized agents-tool result using the saved id and next offset from its notice. Returns at most 16,000 characters, only from this bot in this conversation. Use only when the preview is insufficient; do not load every page by default. Results expire after one hour, on app restart, or under cache pressure. This never reruns the original action.",
     inputSchema: {
@@ -860,7 +878,7 @@ const SKILL_TOOL_NAMES = new Set(["skills_list", "skill_manage"]);
 export const SHARED_COMPUTER_TOOL_NAMES = new Set(["list_shared_computers", "shared_computer"]);
 const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);
 const CHIEF_ONLY_TOOL_NAMES = new Set([
-  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread",
+  "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread", "decide_project_task",
 ]);
 const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model"]);
 const WATCHER_TOOL_NAMES = new Set(["create_options_card"]);
@@ -902,6 +920,7 @@ function catalogTools(profile: CatalogProfile) {
     (profile.memoryEnabled !== false || (tool.name !== "memory_update" && tool.name !== "memory_log")) &&
     (profile.escalations === true || tool.name !== "raise_escalation") &&
     (profile.team === true || !PERSON_TOOL_NAMES.has(tool.name)) &&
+    (profile.projectActive === true || (tool.name !== "propose_project_task" && tool.name !== "decide_project_task")) &&
     (profile.computerSelection === true || tool.name !== "select_computer") &&
     (profile.room !== true || !ROOM_REFUSED_TOOL_NAMES.has(tool.name)) &&
     (profile.activeWaits === true || !WAITING_ONLY_TOOL_NAMES.has(tool.name)));

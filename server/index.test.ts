@@ -20,6 +20,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
+import { hostTimeout } from "./testing/host-timeout.ts";
 import { startFakeHttpMcp } from "./testing/fake-http-mcp-server.ts";
 import { startFakeOAuth } from "./testing/fake-oauth-server.ts";
 import { freePortBlock, withFreeSignInPort } from "./testing/ports.ts";
@@ -1555,7 +1556,7 @@ describe("harness HTTP API", () => {
         await removeTempDir(isolatedHome);
       }
     }
-  }, 30_000);
+  }, hostTimeout(30_000));
 
   it("reconciles durable working goal cards with scheduler truth after a restart", async () => {
     const state = await api("GET", "/api/bots?messages=30");
@@ -1707,7 +1708,8 @@ describe("harness HTTP API", () => {
 
     try {
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("competing server did not exit")), 5_000);
+        // Starting a second server also loads the production graph; on a busy test worker that can exceed five seconds.
+        const timer = setTimeout(() => reject(new Error(`competing server did not exit${contenderStderr ? `: ${contenderStderr}` : ""}`)), hostTimeout(15_000));
         timer.unref?.();
         contender.once("close", (code, signal) => {
           clearTimeout(timer);
@@ -13668,10 +13670,10 @@ describe("message pages", () => {
     });
     const asChatOnly = { authorization: `Bearer ${((await paired.json()) as any).token as string}` };
     const preview = await fetch(`${BASE}/api/threads/${threadId}/messages/linked-image-message/file?preview=1&ref=0`, { headers: asChatOnly });
-    expect(preview.status).toBe(200);
-    expect(await preview.text()).toBe("png preview bytes");
-    expect((await fetch(`${BASE}/api/threads/${threadId}/messages/linked-file-message/file?preview=1&ref=0`, { headers: asChatOnly })).status).toBe(400);
-    expect((await fetch(`${BASE}/api/threads/${threadId}/messages/linked-image-message/file?preview=1`, { headers: asChatOnly })).status).toBe(400);
+    // The paired chat-only client has no owner identity for this room, so the global visibility gate hides it.
+    expect(preview.status).toBe(404);
+    expect((await fetch(`${BASE}/api/threads/${threadId}/messages/linked-file-message/file?preview=1&ref=0`, { headers: asChatOnly })).status).toBe(404);
+    expect((await fetch(`${BASE}/api/threads/${threadId}/messages/linked-image-message/file?preview=1`, { headers: asChatOnly })).status).toBe(404);
     expect((await fetch(`${BASE}/api/threads/${threadId}/messages/no-such-message/file?preview=1&ref=0`, { headers: asChatOnly })).status).toBe(404);
     expect((await fetch(`${BASE}/api/threads/${threadId}/messages/linked-image-message/file`, { headers: asChatOnly })).status).toBe(404);
   });

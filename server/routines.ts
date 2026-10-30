@@ -660,6 +660,7 @@ export class RoutineManager {
     if (request && this.matchingRoutineRequestReceipt(request)) return true;
     const at = this.routines.findIndex((r) => r.id === id);
     if (at === -1) return false;
+    const removed = this.routines[at]!;
     const changedRuns: RoutineRun[] = [];
     this.commitMutation(() => {
       this.routines.splice(at, 1);
@@ -678,7 +679,8 @@ export class RoutineManager {
       if (request) this.rememberRoutineRequest(request, id, this.now());
     });
     for (const run of changedRuns) this.emitRun(run);
-    this.options.emit?.({ kind: "routine.deleted", routineId: id });
+    this.options.emit?.({ kind: "routine.deleted", routineId: id, botId: removed.botId, groupId: removed.groupId,
+      sourceThreadId: removed.sourceThreadId, resultsThreadId: removed.resultsThreadId });
     return true;
   }
 

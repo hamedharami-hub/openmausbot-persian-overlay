@@ -1,7 +1,7 @@
 import { redactSecretsInText } from "../../shared/redact.ts";
 import type { PriceList } from "../prices.ts";
-import type { RequestAuth } from "../request-auth.ts";
 import type { SpendState } from "../spend.ts";
+import type { RequestAuth } from "../request-auth.ts";
 import {
   flushUsageLedger,
   parseUsageRange,
@@ -26,6 +26,8 @@ export interface UsageRouteDeps {
   liveBot: TraceServiceDeps["liveBot"];
   /** Which threads this viewer may read today; a trace shows only those. */
   canSee(auth: RequestAuth): (threadId: string) => boolean;
+  visibleThread?(auth: RequestAuth, threadId: string): boolean;
+  readRows?(dataDir: string, range: { from: Date; to: Date }): ReturnType<typeof readUsage>;
 }
 
 const TRACE = /^\/api\/usage\/traces\/([^/]{1,600})$/;
@@ -63,7 +65,13 @@ export function createUsageRoutes(deps: UsageRouteDeps): RouteHandler {
     const range = parseUsageRange(url.searchParams.get("from"), url.searchParams.get("to"));
     if (!range) return json(res, 400, { error: "from and to must be YYYY-MM-DD, from no later than to, at most a year apart" });
     await flushUsageLedger(deps.dataDir);
-    const rows = readUsage(deps.dataDir, range);
+    const allRows = (deps.readRows ?? readUsage)(deps.dataDir, range);
+    const isAdmin = auth.kind === "loopback" || auth.scopes.includes("admin");
+    const rows = isAdmin ? allRows : deps.visibleThread
+      ? allRows.filter((row) => deps.visibleThread!(auth, row.threadId) &&
+        (row.trigger.kind !== "owner" && (row.trigger.kind !== "user" ||
+          (auth.kind === "session" && Boolean(auth.session.email) && row.trigger.email?.trim().toLowerCase() === auth.session.email!.trim().toLowerCase()))))
+      : [];
     const prices = deps.prices();
     if (path === "/api/usage.csv") {
       const stamp = (date: Date) => date.toISOString().slice(0, 10);
@@ -86,7 +94,7 @@ export function createUsageRoutes(deps: UsageRouteDeps): RouteHandler {
       to: range.to.toISOString(),
       groupBy,
       ...summarizeUsage(rows, groupBy, prices),
-      budget: deps.budget(),
+      budget: isAdmin ? deps.budget() : null,
       billing: prices ? { currency: deps.currency() } : null,
     });
   };

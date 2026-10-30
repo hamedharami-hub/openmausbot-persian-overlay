@@ -4,12 +4,19 @@ import { KeyRound } from "lucide-react";
 import { liveDisclosure } from "@/lib/call-mode";
 import { dismissLiveNotice } from "@/lib/live-call-media";
 import { t } from "@/lib/i18n";
-import { useStore } from "@/state/store";
+import { useStore, type Action } from "@/state/store";
 import { openKeySettings } from "./keys/key-focus";
+import { GeminiKeySetup } from "./GeminiKeySetup";
+
+export const OPEN_API_KEYS = { type: "toggleAppSettings", open: true, section: "connections" } as const satisfies Action;
 
 export function LiveKeyNeeded() {
   const { state, dispatch } = useStore();
   const titleId = useId();
+  if (state.config?.live?.provider === "gemini") return <section className="flex flex-col gap-2.5 rounded-xl border border-hairline bg-panel p-3 text-left">
+    <GeminiKeySetup compact />
+    <p className="text-[11.5px] leading-[1.45] text-ink-tertiary">{liveDisclosure({ provider: "gemini" })} {t("call.live.gemini.cost")}</p>
+  </section>;
   return <section aria-labelledby={titleId} className="flex flex-col gap-2.5 rounded-xl border border-hairline bg-panel p-4 text-left">
     <div className="flex items-start gap-2.5">
       <KeyRound size={16} className="mt-0.5 shrink-0 text-ink-secondary" aria-hidden="true" />

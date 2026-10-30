@@ -27,6 +27,8 @@ export interface CatalogProfile {
   /** The bot has a wait in this chat that has not ended: list_waits and cancel_wait, which act only on this chat's
    * waits, are mounted. Without one they still answer a call (agents-catalog.ts callableTools), but are not listed. */
   activeWaits?: boolean;
+  /** The server matched this turn to a project; the task tools are mounted. */
+  projectActive?: boolean;
 }
 
 /** Everything is off unless the harness says "1". */
@@ -46,5 +48,6 @@ export function catalogProfileFromEnv(env: NodeJS.ProcessEnv): CatalogProfile {
     computerSelection: env.OMB_COMPUTER_SELECTION === "1",
     room: env.OMB_ROOM === "1",
     activeWaits: env.OMB_ACTIVE_WAITS === "1",
+    projectActive: env.OMB_PROJECT_ACTIVE === "1",
   };
 }

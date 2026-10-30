@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { launchVerificationServer } from "../scripts/control-omb.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 
-it("blocks direct and group turns when an offline engine returns without support for its saved variant", async () => {
+it("rejects unsupported saved variants without suppressing other Everyone members", async () => {
   const fixture = await launchVerificationServer();
   const { dataDir, url, logPath } = fixture.info;
   let restarted: ChildProcess | undefined;
@@ -82,6 +82,18 @@ it("blocks direct and group turns when an offline engine returns without support
     { timeout: 10_000 }).toBe(true);
     expect(existsSync(fixture.fixtureDumpPath), "Neither rejected turn may reach the fake provider prompt").toBe(false);
     evidence.push({ selection, returnedCapabilities: returning.capabilities, direct, groupSend: sent.status, groupMessages: await messages(), providerPromptStarted: false });
+    expect((await api("PATCH", `/api/groups/${group.id}`, { defaultResponder: { kind: "everyone" } })).status).toBe(200);
+    expect((await api("POST", `/api/groups/${group.id}/messages`, { text: "Everyone, report your own result." })).status).toBe(202);
+    await expect.poll(async () => (await messages()).filter((message: any) =>
+      message.kind === "text" && message.role === "bot" && message.from?.botId === peer.body.bot.id).length,
+    { timeout: 15_000 }).toBe(1);
+    const everyoneMessages = await messages();
+    expect(everyoneMessages.filter((message: any) =>
+      message.kind === "text" && message.role === "bot" && message.from?.botId === bot.id)).toHaveLength(0);
+    expect(everyoneMessages.filter((message: any) =>
+      message.kind === "activity" && message.from?.botId === bot.id && message.tool?.ok === false &&
+      message.tool.name.includes("saved model variant cannot be applied"))).toHaveLength(2);
+    evidence.push({ everyoneMessages, blockedMember: bot.id, completedMember: peer.body.bot.id });
   } finally {
     const evidencePath = `${logPath}.model-variant-return.json`;
     writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));

@@ -17,7 +17,7 @@ import {
 } from "../message-file.ts";
 import { resolveRequestAuth, type RequestAuth, type ResolveOptions } from "../request-auth.ts";
 import type { queuedSteerSnapshot } from "../steer-queue.ts";
-import type { BotRecord, GroupRecord, Message, Store } from "../store.ts";
+import type { BotRecord, GroupRecord, Message, Store, TaskRecord } from "../store.ts";
 import { createJobRoutes } from "./jobs.ts";
 import { PASS, type RouteContext, type RouteHandler } from "./table.ts";
 
@@ -31,6 +31,7 @@ export interface ThreadRouteDeps {
   groupThreadIsWorking(groupId: string, threadId: string): boolean;
   /** What people's lines are called in this conversation (replies.ts PersonName). */
   userName(threadId: string): PersonName;
+  profileName?(auth: RequestAuth): string | undefined;
   sessions: ResolveOptions["sessions"];
   groupUsageReader: Pick<GroupUsageReader, "refresh">;
   hostedWorkspace: boolean;
@@ -54,6 +55,9 @@ export interface ThreadRouteDeps {
   visibleTo(viewer: Viewer): VisibleSet;
   /** A Team Cloud: gives a member their own MausBot once, before their first list of bots. */
   memberDefaultBot?(email: string): unknown;
+  ensurePrivateThread?(botId: string, ownerKey: string): Promise<TaskRecord | null>;
+  /** Persist ownership until an attachment is explicitly shared by a message. */
+  claimAttachment?(auth: RequestAuth, path: string): "claimed" | "already-owned" | "conflict" | "storage-error";
 }
 
 export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
@@ -64,11 +68,18 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
     botComputerControlSnapshot, messageFileRootsForThread, viewerFor, visibleTo,
   } = deps;
   const jobs = createJobRoutes({ store, coordinator: deps.coordinator, groupThreadIsWorking: deps.groupThreadIsWorking, viewerFor, visibleTo, sessions });
+  const claimAttachment = (auth: RequestAuth, saved: SavedAttachment) => {
+    if (!deps.claimAttachment) return null;
+    const result = deps.claimAttachment(auth, saved.path);
+    if (result === "claimed" || result === "already-owned") return null;
+    if (result === "conflict") return { status: 409, error: "This upload id belongs to another account. Start a new upload." };
+    return { status: 503, error: "The upload was saved, but its private access could not be recorded. Retry the same upload." };
+  };
   const handle = async ({ req, res, url, path, method, auth, json, readBody }: RouteContext): Promise<unknown> => {
     let m: RegExpMatchArray | null = null;
     const member = auth.kind === "session" && auth.session.membershipAuthority === "team" ? auth.session.email : undefined;
     if (member && method === "GET" && path === "/api/bots") deps.memberDefaultBot?.(member);
-    const visible = visibleTo(viewerFor(auth));
+    let visible = visibleTo(viewerFor(auth));
     const workspaceAccess = deps.workspaceAccess();
     const desktopMutationToken = deps.desktopMutationToken();
     const companionMutationToken = deps.companionMutationToken();
@@ -79,15 +90,26 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       if (limit === null) return json(res, 400, { error: "messages must be a non-negative whole number" });
       // tasks stays explicit: clients expect [] where wireBot() would omit the key.
       const shownBots = store.bots.filter((bot) => visible.bot(bot.id));
+      const viewer = viewerFor(auth);
+      if (visible.member && viewer.kind === "member" && viewer.personKey && deps.ensurePrivateThread) {
+        // Keep one private starter per visible bot/account. The store callback deduplicates
+        // parallel initial loads and persists ownership before the task is announced.
+        await Promise.all(shownBots.map((bot) => deps.ensurePrivateThread!(bot.id, viewer.personKey!)));
+        visible = visibleTo(viewer);
+      }
       const queued = publicBotQueuedMessages();
       return json(res, 200, {
-        bots: shownBots.map((bot) => {
+        bots: shownBots.map((original) => {
+          const bot = store.bot(original.id) ?? original;
           const wired = wireBot(bot);
-          // Narrowed first: on a Team Cloud the selected conversation may be someone else's, and its words never go out.
-          const shown = memberBot({ ...wired, tasks: wired.tasks ?? [] }, visible);
-          return { ...shown, ...(typeof shown.threadId === "string" ? messagePage(shown.threadId, limit) : { messages: [], hasMore: false, activeLeafId: null }) };
+          const scoped = memberBot({ ...wired, tasks: wired.tasks ?? [] }, visible);
+          const selectedThreadId = scoped.threadId;
+          const page = selectedThreadId && visible.thread(selectedThreadId)
+            ? messagePage(selectedThreadId, limit)
+            : { messages: [], hasMore: false, activeLeafId: null };
+          return { ...scoped, ...page };
         }),
-        botQueuedMessages: visible.everything ? queued : Object.fromEntries(Object.entries(queued).filter(([threadId]) => visible.thread(threadId))),
+        botQueuedMessages: visible.member ? Object.fromEntries(Object.entries(queued).filter(([threadId]) => visible.thread(threadId))) : queued,
         sections: visible.sections(store.sections),
         groups: store.groups.filter((g) => visible.group(g.id)).map((g) => {
           const room = { ...publicGroupState(g), ...messagePage(g.threadId, limit) };
@@ -316,6 +338,8 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         });
         req.on("error", (e) => fail(400, e instanceof Error ? e.message : String(e)));
       });
+      const accessError = claimAttachment(auth, saved);
+      if (accessError) return json(res, accessError.status, { error: accessError.error });
       return json(res, 201, saved);
     }
 
@@ -352,6 +376,8 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         // Returning must not destroy the socket: the caller still sends the 4xx when the byte count crosses the limit.
         const chunks = req.iterator({ destroyOnReturn: false }) as AsyncIterable<Buffer>;
         const saved = await saveFile(chunks, name, rawType ?? "", { uploadId, expectedBytes: declaredLength });
+        const accessError = claimAttachment(auth, saved);
+        if (accessError) return json(res, accessError.status, { error: accessError.error });
         return json(res, 201, saved);
       } catch (error) {
         req.resume();
@@ -405,7 +431,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         if (!ids) activePaths.set(threadId, (ids = new Set(store.activePath(threadId).map((m) => m.id))));
         return ids.has(messageId);
       };
-      const found = await searchMessagesAsync(q, visible.everything ? limit : Math.min(limit * 10, 1_000), threadId);
+      const found = await searchMessagesAsync(q, visible.member ? Math.min(limit * 10, 1_000) : limit, threadId);
       // A scan may outlive a revocation or audience edit: authorize again after the await.
       if (HOSTED_WORKSPACE && auth.kind === "session") {
         const failure = workspaceAccess ? await workspaceAccess.authorize(req, auth)
@@ -465,7 +491,7 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
         });
         return res.end(JSON.stringify({ name: title, threadId, messages: slim }, null, 2));
       }
-      const userName = userNameFor(threadId);
+      const userName = deps.profileName ? deps.profileName(auth) ?? "User" : userNameFor(threadId);
       const lines: string[] = [`# ${title}`, ""];
       for (const msg of messages) {
         const sentBy = speakerOf(userName, msg);

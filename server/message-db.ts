@@ -339,6 +339,17 @@ export function markThreadNotificationLogRead(threadId: string, includeSpend = t
   return rows.map((row) => row.id);
 }
 
+export function markAllNotificationLogRead(): void {
+  db().prepare("UPDATE notification_log SET read = 1 WHERE read = 0").run();
+}
+
+/** A member marks only notifications from threads they can see; the log is already bounded to 500 rows. */
+export function markNotificationLogReadForThreads(threadIds: readonly string[]): void {
+  const ids = [...new Set(threadIds.filter((id) => typeof id === "string" && id.length > 0))];
+  if (!ids.length) return;
+  db().prepare(`UPDATE notification_log SET read = 1 WHERE read = 0 AND thread_id IN (${ids.map(() => "?").join(",")})`).run(...ids);
+}
+
 export function saveChatFollowup(followup: Omit<ChatFollowup, "status">): void {
   writeFollowups((connection) => connection.prepare(
     "INSERT INTO chat_followups(id, kind, owner_id, thread_id, send_id, status, payload) VALUES (?, ?, ?, ?, ?, 'pending', ?)",

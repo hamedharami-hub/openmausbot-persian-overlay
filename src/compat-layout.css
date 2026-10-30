@@ -1,0 +1,47 @@
+.glass-bar[data-glass-bar="top"] {
+  background: var(--color-panel);
+}
+
+[data-table-dialog] {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 767px) {
+  [data-message-role="assistant"] [data-message-line] {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-message-line] > [data-chat-bubble] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-reply-blocks] > div:has(> [data-chat-bubble]) {
+    flex-wrap: wrap;
+  }
+
+  [data-message-role="assistant"] [data-reply-blocks] [data-chat-bubble],
+  [data-message-role="assistant"] [data-reply-table] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-message-line] > :not([data-chat-bubble]) {
+    order: 1;
+  }
+
+  [data-message-role="assistant"] .reply-bubble,
+  [data-message-role="assistant"] [data-conversational-reply] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] .chat-md {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+}

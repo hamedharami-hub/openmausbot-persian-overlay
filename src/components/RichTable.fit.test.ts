@@ -40,8 +40,8 @@ describe("a table in a reply", () => {
     expect(floors.reduce((sum, width) => sum + width, 0) + 7 * 24).toBeLessThan(704);
     for (const cell of doc.querySelectorAll("td > div")) expect(cell.className).toContain("[overflow-wrap:anywhere]");
     const surface = doc.querySelector(".rich-table")!;
-    expect(surface.className).toContain("w-fit");
-    expect(surface.className).toContain("min-w-[min(100%,var(--chat-prose-max))]");
+    expect(surface.className).toContain("w-full");
+    expect(surface.className).toContain("min-w-0");
     expect(surface.parentElement!.className).toBe("chat-table");
   });
 

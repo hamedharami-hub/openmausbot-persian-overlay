@@ -11,6 +11,8 @@ export interface ReplayEntry {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** A person's mark to retain this source when summarizing older exchanges. */
+  important?: boolean;
 }
 
 export interface ReplayToolCall {

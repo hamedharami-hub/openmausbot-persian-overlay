@@ -26,7 +26,7 @@ const bot: Bot = {
 const render = (element: ReturnType<typeof createElement>) =>
   renderToStaticMarkup(createElement(StoreProvider, null, element));
 const renderOnCloud = (element: ReturnType<typeof createElement>) => {
-  const config = { cloudHome: true, live: { configured: true, voice: "marin", readTypedReplies: true, idleMinutes: 5 } } as AppState["config"];
+  const config = { cloudHome: true, live: { configured: true, provider: "openai", geminiConfigured: false, voice: "marin", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 } } as AppState["config"];
   const value = { state: { ...initialState, config }, dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {} };
   return renderToStaticMarkup(createElement(BotEditorStore, { value, children: element }));
 };
@@ -149,7 +149,7 @@ describe("LiveCallSettings", () => {
       const value = { state: { ...initialState, config: { live } as AppState["config"] }, dispatch: vi.fn(), flushBotPatches: async () => null, refreshInstances: async () => {}, refreshModels: async () => {} };
       return renderToStaticMarkup(createElement(BotEditorStore, { value, children: createElement(LiveCallSettings, { onClose: vi.fn() }) }));
     };
-    const base = { voice: "marin", readTypedReplies: true, idleMinutes: 5 };
+    const base = { provider: "openai" as const, geminiConfigured: false, geminiVoice: "Kore", voice: "marin", readTypedReplies: true, idleMinutes: 5 };
     const fromApiKeys = withLive({ ...base, configured: true, keySource: "openai" });
     expect(fromApiKeys).toContain("Uses your OpenAI API key from Settings → API keys.");
     expect(fromApiKeys).not.toContain("Remove key");

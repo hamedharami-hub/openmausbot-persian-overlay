@@ -68,7 +68,8 @@ export interface ConfigStatus {
     configured: boolean;
     ready: boolean;
     voice: string;
-    provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai";
+    provider?: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini";
+    geminiModel?: string;
     baseUrl?: string;
     model?: string;
     /** Fish Audio speech model; present only while Fish is the provider. */

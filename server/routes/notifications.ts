@@ -1,4 +1,4 @@
-import { markNotificationLogRead, markThreadNotificationLogRead, recentNotificationLog } from "../message-db.ts";
+import { markAllNotificationLogRead, markNotificationLogRead, markNotificationLogReadForThreads, markThreadNotificationLogRead, recentNotificationLog } from "../message-db.ts";
 import type { NotificationLogEntry } from "../../shared/notification.ts";
 import { ownerOrAdmin, type RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
@@ -9,16 +9,25 @@ export function readThreadNotifications(threadId: string, broadcast: (payload: R
   if (ids.length) broadcast({ kind: "notifications.read", threadId, ids });
 }
 
-/** `shown`: on a Team Cloud another person's private chat's notifications are theirs alone, an admin's list included. */
-export function createNotificationRoutes(deps = {
+interface NotificationRouteDeps {
+  recent: typeof recentNotificationLog;
+  markRead: typeof markNotificationLogRead;
+  markAllRead?: typeof markAllNotificationLogRead;
+  markReadForThreads?: typeof markNotificationLogReadForThreads;
+  visibleThread?(auth: import("../request-auth.ts").RequestAuth, threadId: string): boolean;
+}
+
+export function createNotificationRoutes(deps: NotificationRouteDeps = {
   recent: recentNotificationLog,
   markRead: markNotificationLogRead,
+  markAllRead: markAllNotificationLogRead,
+  markReadForThreads: markNotificationLogReadForThreads,
 }, shown: (auth: RequestAuth) => (threadId: string) => boolean = () => () => true,
   reaches: (auth: RequestAuth, entry: NotificationLogEntry) => boolean = () => true): RouteHandler {
   const visible = (auth: RequestAuth) => {
     const seen = shown(auth);
     const admin = ownerOrAdmin(auth);
-    return deps.recent().filter((entry) => (entry.kind !== "spend" || admin) && (!entry.threadId || seen(entry.threadId)) && reaches(auth, entry));
+    return deps.recent().filter((entry) => (entry.kind !== "spend" || admin) && (!entry.threadId || (seen(entry.threadId) && (!deps.visibleThread || deps.visibleThread(auth, entry.threadId)))) && reaches(auth, entry));
   };
   return async ({ res, path, method, auth, json }) => {
     if (method === "GET" && path === "/api/notifications") {

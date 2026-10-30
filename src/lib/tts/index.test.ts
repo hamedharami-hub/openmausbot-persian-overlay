@@ -9,8 +9,11 @@ class FakeAudio {
   src: string;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  pause = vi.fn();
-  play = vi.fn(async () => {});
+  paused = false;
+  playbackRate = 1;
+  currentTime = 3;
+  pause = vi.fn(() => { this.paused = true; });
+  play = vi.fn(async () => { this.paused = false; });
 
   constructor(src: string) {
     this.src = src;
@@ -27,6 +30,7 @@ function json(body: unknown): Response {
 
 describe("Speaker lifecycle", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     FakeAudio.latest = null;
     vi.restoreAllMocks();
     vi.stubGlobal("Audio", FakeAudio);
@@ -52,6 +56,133 @@ describe("Speaker lifecycle", () => {
     await expect(speaking).resolves.toBeUndefined();
     expect(FakeAudio.latest!.pause).toHaveBeenCalled();
     expect(speaker.state).toEqual({ status: "idle" });
+  });
+
+  it("pauses and resumes the current position and changes playback speed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) =>
+        String(input).endsWith("/prepare")
+          ? json({ ready: true, utterances: ["This clip should pause in place."] })
+          : new Response(new Blob(["wav"]), { status: 200 }),
+      ),
+    );
+    const speaker = new Speaker();
+    const speaking = speaker.speak("This clip should pause in place.");
+    await vi.waitFor(() => expect(FakeAudio.latest).not.toBeNull());
+    const clip = FakeAudio.latest!;
+    const position = clip.currentTime;
+
+    speaker.pauseOrResume();
+    expect(clip.paused).toBe(true);
+    expect(speaker.state.status).toBe("paused");
+    expect(clip.currentTime).toBe(position);
+    speaker.pauseOrResume();
+    expect(clip.play).toHaveBeenCalledTimes(2);
+    expect(clip.currentTime).toBe(position);
+    await vi.waitFor(() => expect(speaker.state.status).toBe("speaking"));
+    expect(speaker.cyclePlaybackRate()).toBe(1.25);
+    expect(clip.playbackRate).toBe(1.25);
+
+    speaker.stop();
+    await speaking;
+  });
+
+  it("uses this device's free speech voice for Persian and preserves pause, resume, and speed controls", async () => {
+    class FakeUtterance {
+      lang = "";
+      rate = 1;
+      voice: SpeechSynthesisVoice | null = null;
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+      constructor(readonly text: string) {}
+    }
+    const faVoice = { voiceURI: "fa-local", name: "Persian", lang: "fa-IR" } as SpeechSynthesisVoice;
+    const sent: FakeUtterance[] = [];
+    const synthesis = {
+      getVoices: () => [faVoice],
+      speak: vi.fn((utterance: FakeUtterance) => sent.push(utterance)),
+      cancel: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+    };
+    vi.stubGlobal("window", { speechSynthesis: synthesis, SpeechSynthesisUtterance: FakeUtterance });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const speaker = new Speaker();
+
+    const speaking = speaker.speak("سلام، حالت چطور است؟");
+    await vi.waitFor(() => expect(synthesis.speak).toHaveBeenCalledTimes(1));
+
+    expect(synthesis.speak).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(sent[0]?.lang).toBe("fa-IR");
+    expect(sent[0]?.voice).toBe(faVoice);
+    sent[0]?.onstart?.();
+    expect(speaker.state.status).toBe("speaking");
+    speaker.pauseOrResume();
+    expect(synthesis.pause).toHaveBeenCalledTimes(1);
+    expect(speaker.state.status).toBe("paused");
+    speaker.pauseOrResume();
+    expect(synthesis.resume).toHaveBeenCalledTimes(1);
+    expect(speaker.cyclePlaybackRate()).toBe(1.25);
+    expect(sent[0]?.rate).toBe(1.25);
+    sent[0]?.onend?.();
+    await speaking;
+  });
+
+  it("reuses a generated clip from its bounded in-memory cache", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const path = String(input);
+      requests.push(path);
+      return path.endsWith("/prepare")
+        ? json({ ready: true, utterances: ["Cache this clip once."] })
+        : new Response(new Blob(["cached-audio"]), { status: 200 });
+    }));
+    const speaker = new Speaker();
+    const first = speaker.speak("Cache this clip once.", { voiceId: "voice-cache-test" });
+    await vi.waitFor(() => expect(FakeAudio.latest).not.toBeNull());
+    FakeAudio.latest!.onended?.();
+    await first;
+
+    FakeAudio.latest = null;
+    const second = speaker.speak("Cache this clip once.", { voiceId: "voice-cache-test" });
+    await vi.waitFor(() => expect(FakeAudio.latest).not.toBeNull());
+    FakeAudio.latest!.onended?.();
+    await second;
+
+    expect(requests.filter((url) => url.endsWith("/prepare"))).toHaveLength(2);
+    expect(requests.filter((url) => url.endsWith("/speak"))).toHaveLength(1);
+  });
+
+  it("renders a new clip after the configured voice service or default voice changes", async () => {
+    let cacheNamespace = "gemini:Kore";
+    let renders = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith("/prepare")) return json({
+        ready: true, utterances: ["The same text with a different voice."], cacheNamespace,
+      });
+      renders += 1;
+      return new Response(new Blob([`audio-${renders}`]), { status: 200 });
+    }));
+    const speaker = new Speaker();
+    const playOnce = async () => {
+      FakeAudio.latest = null;
+      const speaking = speaker.speak("The same text with a different voice.");
+      await vi.waitFor(() => expect(FakeAudio.latest).not.toBeNull());
+      FakeAudio.latest!.onended?.();
+      await speaking;
+    };
+    await playOnce();
+    await playOnce();
+    expect(renders).toBe(1);
+    cacheNamespace = "gemini:Zephyr";
+    await playOnce();
+    expect(renders).toBe(2);
+    cacheNamespace = "other-service:Zephyr";
+    await playOnce();
+    expect(renders).toBe(3);
   });
 
   it("aborts preparation when stopped instead of leaving a request alive", async () => {

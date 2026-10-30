@@ -15,6 +15,9 @@ export interface VisibilityHostDeps {
   team: boolean;
   audiencesFor(viewer: Viewer): ThreadAudiences | undefined;
   threadsReferencing(name: string): readonly string[];
+  personKey?(auth: RequestAuth): string;
+  privateOwnerOf?(threadId: string): string | undefined;
+  attachmentVisible?(name: string, visible: VisibleSet, auth: RequestAuth, references: readonly string[]): boolean;
 }
 
 export function createVisibilityHost(deps: VisibilityHostDeps) {
@@ -23,7 +26,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
   function viewerFor(auth: RequestAuth): Viewer {
     if (auth.kind === "loopback" || (auth.scopes.includes("admin") && !deps.team)) return SEES_EVERYTHING;
     if (auth.scopes.includes("admin")) return { kind: "all", email: auth.session.email ?? "" };
-    return { kind: "member", ...(auth.session.email ? { email: auth.session.email } : {}) };
+    return { kind: "member", ...(!deps.team && deps.personKey ? { personKey: deps.personKey(auth) } : {}), ...(auth.session.email ? { email: auth.session.email } : {}) };
   }
 
   const threadOwners = new Map<string, ThreadOwner | null>();
@@ -40,10 +43,10 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     return owner ?? undefined;
   }
   function visibleTo(viewer: Viewer): VisibleSet {
-    const key = viewer.kind === "all" ? (viewer.email === undefined ? "*" : `admin:${viewer.email.trim().toLowerCase()}`) : `member:${viewer.email?.trim().toLowerCase() ?? ""}`;
+    const key = viewer.kind === "all" ? (viewer.email === undefined ? "*" : `admin:${viewer.email.trim().toLowerCase()}`) : `member:${viewer.email?.trim().toLowerCase() ?? ""}:${viewer.personKey ?? ""}`;
     let set = visibleSets.get(key);
     if (!set) {
-      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer));
+      set = new VisibleSet(store.bots, store.groups, viewer, threadOwner, deps.audiencesFor(viewer), deps.privateOwnerOf);
       if (visibleSets.size >= 1_000) visibleSets.clear();
       visibleSets.set(key, set);
     }
@@ -51,6 +54,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
   }
   /** Cached until the next bot, room or thread change (store.onChange). */
   function forgetVisibility(): void {
+    attachmentThreads.clear();
     threadOwners.clear();
     visibleSets.clear();
   }
@@ -71,7 +75,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
   }
 
   /** The one visibility check every member request naming a subject passes through (a team's admin's too). */
-  function subjectVisible(subject: PathSubject, visible: VisibleSet): boolean {
+  function subjectVisible(subject: PathSubject, visible: VisibleSet, auth: RequestAuth): boolean {
     switch (subject.kind) {
       case "bot":
         return !store.bot(subject.id) || visible.bot(subject.id);
@@ -88,13 +92,19 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
         return !run || routineRunVisible(run, visible);
       }
       case "attachment":
-        return visible.attachment(subject.name, threadsUsingAttachment);
+        return visible.attachment(subject.name, threadsUsingAttachment) && (deps.attachmentVisible?.(subject.name, visible, auth, threadsUsingAttachment(subject.name)) ?? true);
     }
   }
 
   /** A member may schedule a routine only for a bot or room they can see. */
   function hiddenRoutineTarget(body: unknown, visible: VisibleSet): string | null {
     if (visible.everything || !body || typeof body !== "object") return null;
+    if (visible.member) {
+      for (const key of ["threadId", "sourceThreadId", "resultsThreadId", "executionThreadId"]) {
+        const id = (body as Record<string, unknown>)[key];
+        if (typeof id === "string" && id && !visible.thread(id)) return "no such conversation";
+      }
+    }
     const { botId, groupId } = body as { botId?: unknown; groupId?: unknown };
     if (typeof botId === "string" && store.bot(botId) && !visible.bot(botId)) return "no such bot";
     if (typeof groupId === "string" && store.group(groupId) && !visible.group(groupId)) return "no such channel";

@@ -3836,15 +3836,16 @@ describe("routine paths that cannot exist where the routine runs", () => {
 });
 
 describe("turning a schedule back on, and a deleted bot's schedules", () => {
-  const start = new Date(2026, 7, 17, 8, 0, 0).getTime();
+  const start = Date.parse("2026-08-17T08:00:00Z");
   const once = (at: number) => ({ name: "Reminder", prompt: "Remind me", botId: "maus-1", schedule: { type: "once" as const, at } });
 
   it("turns a paused schedule back on with its next occurrence", () => {
+    vi.stubEnv("TZ", "UTC");
     const h = harness(start);
     const routine = h.manager.create({ name: "Daily", prompt: "Summarize", botId: "maus-1", schedule: { type: "daily", time: "09:00", weekdays: [0, 1, 2, 3, 4, 5, 6] } });
     expect(h.manager.update(routine.id, { enabled: false })).toMatchObject({ enabled: false, nextRunAt: null });
     h.setNow(start + 3 * 60 * 60_000);
-    expect(h.manager.update(routine.id, { enabled: true })).toMatchObject({ enabled: true, nextRunAt: new Date(2026, 7, 18, 9, 0).getTime() });
+    expect(h.manager.update(routine.id, { enabled: true })).toMatchObject({ enabled: true, nextRunAt: Date.parse("2026-08-18T09:00:00Z") });
   });
 
   it("refuses to turn a one-time schedule back on once its time has passed, instead of running it again and switching itself off", async () => {
@@ -3882,7 +3883,10 @@ describe("turning a schedule back on, and a deleted bot's schedules", () => {
     expect(h.manager.listRoutines().map((routine) => routine.id)).toEqual([kept.id]);
     expect(h.manager.listRuns().map((run) => run.botId)).toEqual(["maus-2"]);
     expect(h.interruptedTurns).toEqual([{ botId: "maus-1", threadId: "thread-1" }]);
-    expect(h.emitted).toEqual(expect.arrayContaining([{ kind: "routine.deleted", routineId: gone.id }, { kind: "routine.deleted", routineId: goneToo.id }]));
+    expect(h.emitted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "routine.deleted", routineId: gone.id, botId: "maus-1" }),
+      expect.objectContaining({ kind: "routine.deleted", routineId: goneToo.id, botId: "maus-1" }),
+    ]));
     expect(JSON.parse(readFileSync(h.options.file!, "utf8")).routines.map((routine: { id: string }) => routine.id)).toEqual([kept.id]);
   });
 

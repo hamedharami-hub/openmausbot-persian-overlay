@@ -64,6 +64,20 @@ describe("MausBot, every person's helper", () => {
     expect(restarted.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([chief.id]);
   });
 
+  it("preserves the existing fleet when the operator opts out of creating a missing helper", () => {
+    const store = new Store(selection);
+    const chief = store.createBot({ name: "Existing chief", color: "blue" });
+    store.setChiefOfStaff(chief.id);
+    store.createBot({ name: "Existing specialist", color: "green" });
+    store.appendMessage(chief.threadId, { role: "user", kind: "text", text: "Keep my conversation." });
+    const before = structuredClone(store.bots);
+    const history = store.messagesFor(chief.threadId).map((message) => message.id);
+    expect(ensureDefaultBot(store, { dataDir: DATA_DIR, createMissing: false })).toBeNull();
+    expect(ensureDefaultBot(new Store(selection), { dataDir: DATA_DIR, createMissing: false })).toBeNull();
+    expect(store.bots).toEqual(before);
+    expect(store.messagesFor(chief.threadId).map((message) => message.id)).toEqual(history);
+  });
+
   it("adopts a new install's renamed MausBot with its history instead of making another, and puts the intro on top of a new conversation", () => {
     const store = new Store(selection);
     const seeded = seededBefore(store);

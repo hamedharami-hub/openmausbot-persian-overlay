@@ -13,12 +13,14 @@ import type { SkillReview } from "../skill-review.ts";
 import { isProjectEmoji, type BotRecord, type Store, type TaskRecord } from "../store.ts";
 import { parseSurface } from "../surface.ts";
 import type { ThreadStarters } from "../thread-starters.ts";
+import type { ThreadAccess } from "../thread-access.ts";
 import { titleConversationExcerpt, type ThreadTitleSource } from "../thread-title.ts";
 import type { MessagePage } from "./channels.ts";
 import { bulkDeleteThreadIds, type BulkDeleteRefusal } from "./bulk-delete.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { sawThread } from "../thread-presence.ts";
 import { readThreadNotifications } from "./notifications.ts";
+import { MAX_MODEL_FALLBACKS, sameFallbackModel, type FallbackModel } from "../../shared/model-fallback.ts";
 
 type HostedModels = NonNullable<ReturnType<typeof hostedModelPolicy>>;
 
@@ -40,6 +42,8 @@ export interface TaskRouteDeps {
   handoffs: Pick<Handoffs, "forget">;
   skillReview: Pick<SkillReview, "dropThread">;
   threadStarters: Pick<ThreadStarters, "set">;
+  threadAccess?: Pick<ThreadAccess, "claimPrivate" | "forget">;
+  threadVisible?(auth: RequestAuth, threadId: string): boolean;
   phoneSecretSubmissions: Pick<PhoneSecretSubmissionRegistry, "hasBot" | "hasThread">;
   titleRegenerations: Pick<Set<string>, "has" | "add" | "delete">;
   directTurnGenerationByThread: ReadonlyMap<string, string>;
@@ -87,6 +91,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
   const HOSTED_FULL_ACCESS_REFUSAL = deps.hostedFullAccessRefusal;
   const deleteRefusal = (auth: RequestAuth, botId: string, threadId: string): { status: 403 | 404 | 409; error: string } | null => {
     if (!store.taskByThread(botId, threadId)) return { status: 404, error: "no such task" };
+    if (deps.threadVisible && !deps.threadVisible(auth, threadId)) return { status: 404, error: "no such task" };
     const notYours = cloudThreadRefusal(auth, threadId);
     if (notYours) return { status: 403, error: notYours };
     if (phoneSecretSubmissions.hasThread(threadId)) {
@@ -102,6 +107,7 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
     for (const threadId of threadIds) coordinator.cancelDirect(threadId, "The source conversation was deleted");
     const result = store.deleteTasks(botId, threadIds);
     for (const threadId of result?.deleted ?? []) {
+      deps.threadAccess?.forget(threadId);
       clearTurnDigestState(threadId);
       skillReview.dropThread(threadId);
       revokeInternalCapabilitiesForThread(threadId);
@@ -192,9 +198,27 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       if (body.projectId !== undefined && (typeof body.projectId !== "string" || !store.project(bot.id, body.projectId))) {
         return json(res, 400, { error: "projectId must belong to this bot" });
       }
-      const task = store.createTask(bot.id, typeof body.title === "string" ? body.title : undefined, body.select !== false, body.projectId, undefined, body.approvalMode, undefined, cwd);
-      if (!task) return json(res, 500, { error: "couldn't create that task" });
-      // Who opened it decides who may answer its cards on a shared workspace.
+      // New direct conversations are private to their account before the bot update is persisted or broadcast.
+      const privateOwner = auth.kind === "session" ? actorKey(auth) : undefined;
+      const privateAccessRequired = privateOwner ? deps.threadAccess : undefined;
+      let claimedThreadId: string | undefined;
+      let task: TaskRecord | null;
+      try {
+        task = store.createTask(
+          bot.id, typeof body.title === "string" ? body.title : undefined, body.select !== false, body.projectId, undefined, body.approvalMode, undefined, cwd,
+          privateAccessRequired ? (pending) => {
+            const claimed = privateAccessRequired.claimPrivate(pending.threadId, privateOwner!);
+            if (claimed) claimedThreadId = pending.threadId;
+            return claimed;
+          } : undefined,
+        );
+      } catch (error) {
+        if (claimedThreadId) privateAccessRequired?.forget(claimedThreadId);
+        throw error;
+      }
+      if (!task && claimedThreadId) privateAccessRequired?.forget(claimedThreadId);
+      if (!task) return json(res, 500, { error: privateAccessRequired ? "couldn't safely create a private conversation; try again" : "couldn't create that task" });
+      // The security-card ownership record remains separate from thread privacy.
       if (auth.kind === "session") threadStarters.set(task.threadId, actorKey(auth));
       return json(res, 201, { bot: publicBot(store.bot(bot.id)!), task: wireTask(task, store.bot(bot.id)!.modelSelection) });
     }
@@ -245,14 +269,14 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
       if (!body || typeof body !== "object" || Array.isArray(body)) return json(res, 400, { error: "body must be a JSON object" });
       const current = store.projectBotForTask(m[1], m[2]);
       if (!current) return json(res, 404, { error: "no such task" });
-      const allowed = new Set(["title", "projectId", "modelSelection", "updateBotDefault", "resetApprovalToAsk", "approvalMode", "autoApprove", "requireAvailableModel", "pinnedMessageId", "acknowledgeLocalAuto", "archivedAt", "pinned", "snoozedUntil", "surface", "refreshPermissions", "link"]);
+      const allowed = new Set(["title", "projectId", "modelSelection", "fallback", "updateBotDefault", "resetApprovalToAsk", "approvalMode", "autoApprove", "requireAvailableModel", "pinnedMessageId", "acknowledgeLocalAuto", "archivedAt", "pinned", "snoozedUntil", "surface", "refreshPermissions", "link"]);
       if (Object.keys(body).some((key) => !allowed.has(key))) return json(res, 400, { error: "unsupported thread setting" });
       const notYours = cloudThreadRefusal(auth, m[2]);
       if (notYours) return json(res, 403, { error: notYours });
-      // On a Cloud home only the owner decides whether a bot may act without asking, even in someone else's conversation.
-      if (CLOUD_HOME && !cloudOwnerSession(auth) &&
+      // Shared bot defaults and execution permissions require administrator authority.
+      if ((!auth.scopes.includes("admin") || (CLOUD_HOME && !cloudOwnerSession(auth))) &&
         (body.approvalMode !== undefined || body.autoApprove !== undefined || body.acknowledgeLocalAuto !== undefined || body.updateBotDefault === true || body.refreshPermissions === true)) {
-        return json(res, 403, { error: "On this Cloud only its owner can change how a bot asks for approval, or its default model." });
+        return json(res, 403, { error: "Only an administrator can change approval permissions or the shared bot default model." });
       }
       if (body.updateBotDefault === true && !ownerOrAdmin(auth)) {
         return json(res, 403, { error: "forbidden: this session may change this thread's model, not the bot's default (needs the admin scope)" });
@@ -354,6 +378,36 @@ export function createTaskRoutes(deps: TaskRouteDeps): RouteHandler & { deleteTa
         const checked = checkedModelSelection(body.modelSelection, { selection: current.modelSelection, busy: threadBusy(current.id, current.threadId) }, body.requireAvailableModel === true);
         if (!checked.ok) return json(res, checked.status, { error: checked.error });
         patch.modelSelection = checked.selection;
+      }
+      if (body.fallback !== undefined) {
+        if (threadBusy(current.id, current.threadId)) return json(res, 409, { error: "stop this thread before changing its fallback models" });
+        if (body.fallback === null) patch.fallback = undefined;
+        else {
+          if (!Array.isArray(body.fallback) || body.fallback.length > MAX_MODEL_FALLBACKS) {
+            return json(res, 400, { error: `fallback must be null or a list of up to ${MAX_MODEL_FALLBACKS} { instanceId, model } entries` });
+          }
+          const chain: FallbackModel[] = [];
+          const primary = patch.modelSelection ?? current.modelSelection;
+          for (const entry of body.fallback as unknown[]) {
+            const row = entry && typeof entry === "object" && !Array.isArray(entry)
+              ? entry as { instanceId?: unknown; model?: unknown }
+              : null;
+            if (!row || Object.keys(row).some(key => key !== "instanceId" && key !== "model") ||
+              typeof row.instanceId !== "string" || !/^[\w.-]+$/.test(row.instanceId) ||
+              typeof row.model !== "string" || !row.model.trim() || row.model.length > 500) {
+              return json(res, 400, { error: `fallback must be null or a list of up to ${MAX_MODEL_FALLBACKS} { instanceId, model } entries` });
+            }
+            const candidate = { instanceId: row.instanceId, model: row.model.trim() };
+            if (chain.some(seen => sameFallbackModel(seen, candidate))) {
+              return json(res, 400, { error: "fallback entries must use unique instanceId and model pairs" });
+            }
+            const checked = checkedModelSelection(candidate, undefined, true);
+            if (!checked.ok) return json(res, checked.status, { error: checked.error });
+            if (sameFallbackModel(candidate, primary)) return json(res, 400, { error: "a fallback model must differ from this thread's primary model" });
+            chain.push(candidate);
+          }
+          patch.fallback = chain;
+        }
       }
       if (body.approvalMode !== undefined || body.autoApprove !== undefined) {
         if (body.autoApprove !== undefined && typeof body.autoApprove !== "boolean") return json(res, 400, { error: "autoApprove must be a boolean" });

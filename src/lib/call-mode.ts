@@ -10,8 +10,8 @@ export const CALL_MODES: ReadonlyArray<{ id: CallMode; label: LocaleKey }> = [
   { id: "live", label: "call.mode.live" },
 ];
 
-export function liveDisclosure({ cloudHome = false }: { cloudHome?: boolean } = {}): string {
-  return t(cloudHome ? "call.live.disclosureCloud" : "call.live.disclosure");
+export function liveDisclosure({ cloudHome = false, provider = "openai" }: { cloudHome?: boolean; provider?: "openai" | "gemini" } = {}): string {
+  return t(provider === "gemini" ? "call.live.gemini.disclosure" : cloudHome ? "call.live.disclosureCloud" : "call.live.disclosure");
 }
 
 export function callModeHint(mode: CallMode, where: { cloudHome?: boolean } = {}): string {

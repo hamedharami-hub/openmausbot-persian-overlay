@@ -7,6 +7,8 @@ export interface ContextMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** A person's mark to retain this source when summarizing older exchanges. */
+  important?: boolean;
   /** Teammate results and other peer-authored text: never deferred. */
   keep?: boolean;
   /** Written into a running turn, which may have read it; no provider says whether it did. */

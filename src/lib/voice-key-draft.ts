@@ -1,4 +1,4 @@
-export type CloudVoiceProvider = "elevenlabs" | "fish";
+export type CloudVoiceProvider = "gemini" | "elevenlabs" | "fish";
 export type VoiceKeyDraft = { provider: CloudVoiceProvider | null; value: string };
 
 /** Never expose a credential draft after the selected provider changes. */

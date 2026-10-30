@@ -279,6 +279,7 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["GET"], path: /^\/api\/notifications$/ },
   { methods: ["POST"], path: /^\/api\/notifications\/read-all$/ },
   { methods: ["POST"], path: /^\/api\/notifications\/[\w-]+\/read$/ },
+  { methods: ["GET"], path: /^\/api\/instances$/ },
   // the update check only reads a version
   { methods: ["GET"], path: /^\/api\/updates\/check$/ },
   { methods: ["POST"], path: /^\/api\/auth\/stream-ticket$/ },
@@ -321,6 +322,9 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/active-branch$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/compact$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/helper-followup$/ }, // MausBot's own person only: see mayFollowUp
+  { methods: ["GET", "PATCH", "POST"], path: /^\/api\/(?:bots|groups)\/[\w-]+\/context$/ },
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/important$/ },
+  { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/important$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/interrupt$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/read$/ },
   { methods: ["DELETE"], path: /^\/api\/bots\/[\w-]+\/queue\/[\w-]+$/ },
@@ -408,6 +412,11 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   // a teammate's picture: the handler serves it to the team's own members only
   { methods: ["GET"], path: /^\/api\/team\/people\/p_[\w-]{22}\/picture$/ },
   { methods: ["PUT"], path: /^\/api\/bots\/[\w-]+\/reports-to$/ },
+  // A user's own short profile/memory fields; the handler derives the account key from this session.
+  { methods: ["GET", "PUT"], path: /^\/api\/me\/profile$/ },
+  // The learned-facts route derives its scope from the authenticated account before reading or deleting.
+  { methods: ["GET"], path: /^\/api\/profile\/learned$/ },
+  { methods: ["POST"], path: /^\/api\/profile\/learned\/[\w-]+\/remove$/ },
 ];
 
 export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {

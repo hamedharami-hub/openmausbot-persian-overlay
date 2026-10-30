@@ -29,6 +29,10 @@ export function userProfileSystemPrompt(profile?: { aboutMe?: string; person?: s
 const VOLATILE_SECTIONS = new Set(["memory", "mentions", "outstanding", "recent", "availability",
   "plan", "assignment", "routine-execution", "skill-instructions", "playbooks", "device-place"]);
 
+export function isVolatilePromptSection(id: string): boolean {
+  return VOLATILE_SECTIONS.has(id);
+}
+
 /** Its id is what puts it in the volatile half. */
 export function teamAvailabilityPart(team: readonly RosterMember[]): PromptPart {
   return { id: "availability", label: "Team availability", text: teammateAvailabilityPrompt(team) };
@@ -77,6 +81,12 @@ export function buildSystemPrompt(
   const sections = ordered
     .filter((part) => part.text.length > 0)
     .map((part) => ({ ...part, bytes: Buffer.byteLength(part.text, "utf8") }));
+  return systemPromptFromSections(sections);
+}
+
+export function systemPromptFromSections(sections: PromptSection[]): {
+  text: string; sections: PromptSection[]; stable: string; volatile: string;
+} {
   const halves = (volatile: boolean) =>
     sections.filter((section) => VOLATILE_SECTIONS.has(section.id) === volatile).map((section) => section.text).join("");
   return { text: sections.map((section) => section.text).join(""), sections, stable: halves(false), volatile: halves(true) };

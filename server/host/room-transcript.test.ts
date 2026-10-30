@@ -125,6 +125,21 @@ describe("the room transcript", () => {
     expect(transcript([row("activity", { role: "bot", kind: "activity", tool: { name: "Bash", ok: true } })]).window("room", "Omkar"))
       .toEqual({ text: "", lines: [], order: [], readable: [] });
   });
+
+  it("replaces folded source lines with a valid summary while retaining later lines and their logical order", () => {
+    const messages = [row("folded", { text: "OLD_DETAIL" }), row("kept", { text: "CURRENT_DETAIL" }),
+      row("summary", { role: "bot", kind: "compaction", text: undefined,
+        compaction: { summary: "OLD_SUMMARY", firstKeptId: "kept", foldedThroughId: "folded", tokensBefore: 1000, by: "person" } }),
+      row("latest", { text: "NEW_CORRECTION" })];
+    const window = transcript(messages).window("room", "Person");
+    expect(window.text).toContain("OLD_SUMMARY");
+    expect(window.text).not.toContain("OLD_DETAIL");
+    expect(window.text).toContain("CURRENT_DETAIL");
+    expect(window.text).toContain("NEW_CORRECTION");
+    expect(window.order).toEqual(["summary", "kept", "latest"]);
+    expect(window.readable).toEqual(window.order);
+    expect(window.lines.map(line => line.id)).toEqual(window.order);
+  });
 });
 
 describe("isRoomContextMessage", () => {

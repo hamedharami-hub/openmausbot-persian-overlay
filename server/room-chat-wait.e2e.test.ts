@@ -179,6 +179,35 @@ const releaseAfterRoomWait = async (roomId: string, botId: string, name: string)
 
 /** Deliberately slow (real turns held open through a real server): the inner polls take 15s, leaving no headroom in vitest's 20s default. */
 describe("chat rooms wait for a member busy elsewhere", { timeout: 45_000 }, () => {
+  it("keeps a configured lead selective, but dispatches every selected member for @everyone and Everyone mode", async () => {
+    const lead = await createBot("Lead", "quick");
+    const peer = await createBot("Peer", "quick");
+    const room = (await api("POST", "/api/groups", {
+      name: "Responder contract",
+      memberIds: [lead.id, peer.id],
+      setup: { bulletin: "", defaultResponder: { kind: "member", botId: lead.id } },
+    })).body.group;
+    const speakers = async () => {
+      const { room: current, messages } = await snapshot(room.id);
+      return { working: current?.working, speakers: roundSummary(messages, lead.id).speakers };
+    };
+    try {
+      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Hello lead" })).status).toBe(202);
+      await expect.poll(speakers, { timeout: 15_000 }).toEqual({ working: false, speakers: ["Lead"] });
+      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "@everyone please answer" })).status).toBe(202);
+      await expect.poll(speakers, { timeout: 15_000 }).toEqual({ working: false, speakers: ["Lead", "Peer"] });
+      expect((await api("PATCH", `/api/groups/${room.id}`, { defaultResponder: { kind: "everyone" } })).status).toBe(200);
+      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Hello team again" })).status).toBe(202);
+      await expect.poll(speakers, { timeout: 15_000 }).toEqual({ working: false, speakers: ["Lead", "Peer", "Lead", "Peer"] });
+      const { state } = await snapshot(room.id);
+      for (const bot of [lead, peer]) {
+        expect(state.bots.find((candidate: { id: string }) => candidate.id === bot.id)?.modelSelection).toEqual(bot.modelSelection);
+      }
+    } finally {
+      await cleanup(room?.id, [lead.id, peer.id]);
+    }
+  });
+
   it("parks on a responder busy in a 1:1, then lets them reply once that turn settles, in order", async () => {
     const busy = await createBot("Busy", "patient");
     const quick = await createBot("Quick", "quick");

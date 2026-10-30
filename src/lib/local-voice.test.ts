@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  listLocalSystemVoices,
-  localSystemVoiceActive,
-  localSystemVoicesAvailable,
+  listLocalDeviceVoices,
+  localDeviceVoiceActive,
+  localDeviceVoicesAvailable,
   remoteSystemVoice,
   remoteVoiceProvider,
-  resolveLocalSystemVoice,
+  resolveLocalDeviceVoice,
   setRemoteSystemVoice,
   setRemoteVoiceProvider,
 } from "./local-voice";
@@ -41,12 +41,12 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("paired desktop voice preferences", () => {
-  it("defaults a paired Mac to its local installed voices", () => {
-    expect(localSystemVoicesAvailable()).toBe(true);
+describe("device voice preferences", () => {
+  it("defaults to browser-installed voices when speech synthesis is available", () => {
+    expect(localDeviceVoicesAvailable()).toBe(true);
     expect(remoteVoiceProvider()).toBe("system");
-    expect(localSystemVoiceActive()).toBe(true);
-    expect(listLocalSystemVoices()).toEqual([
+    expect(localDeviceVoiceActive()).toBe(true);
+    expect(listLocalDeviceVoices()).toEqual([
       { id: "com.apple.voice.samantha", label: "Samantha", description: "en-US" },
       { id: "com.apple.voice.daniel", label: "Daniel", description: "en-GB" },
     ]);
@@ -55,21 +55,31 @@ describe("paired desktop voice preferences", () => {
   it("keeps engine and per-agent voice choices on this device", () => {
     setRemoteSystemVoice("bot-1", "com.apple.voice.samantha");
     expect(remoteSystemVoice("bot-1")).toBe("com.apple.voice.samantha");
-    expect(resolveLocalSystemVoice("com.apple.voice.samantha")).toBe(voices[0]);
+    expect(resolveLocalDeviceVoice("com.apple.voice.samantha")).toBe(voices[0]);
 
     setRemoteVoiceProvider("host");
     expect(remoteVoiceProvider()).toBe("host");
-    expect(localSystemVoiceActive()).toBe(false);
+    expect(localDeviceVoiceActive()).toBe(false);
     expect(remoteSystemVoice("bot-1")).toBe("com.apple.voice.samantha");
   });
 
-  it("never offers Mac voices on a Windows client", () => {
+  it("uses browser-provided voices on Windows too", () => {
     vi.stubGlobal("window", {
       ogb: { platform: "win32", remoteClient: { active: true } },
       SpeechSynthesisUtterance: class {},
       speechSynthesis: { getVoices: () => voices },
     });
-    expect(localSystemVoicesAvailable()).toBe(false);
-    expect(listLocalSystemVoices()).toEqual([]);
+    expect(localDeviceVoicesAvailable()).toBe(true);
+    expect(listLocalDeviceVoices()).toHaveLength(2);
+  });
+
+  it("works in a normal browser without a desktop bridge", () => {
+    vi.stubGlobal("window", {
+      SpeechSynthesisUtterance: class {},
+      speechSynthesis: { getVoices: () => voices },
+    });
+    expect(localDeviceVoicesAvailable()).toBe(true);
+    expect(localDeviceVoiceActive()).toBe(true);
+    expect(listLocalDeviceVoices()).toHaveLength(2);
   });
 });

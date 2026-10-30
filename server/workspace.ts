@@ -560,13 +560,13 @@ const NOTES_IN_RESULT =
 
 /** Memory is a prompt-injection persistence vector once a bot copies untrusted text into it.
  * `writesRefused`: this turn's notes would be refused, so it is told where facts go instead. */
-export function memorySystemPrompt(botId: string, opts: { managedWrites?: boolean; fileTools?: boolean; enabled?: boolean; writesRefused?: boolean } = {}): string {
+export function memorySystemPrompt(botId: string, opts: { managedWrites?: boolean; fileTools?: boolean; enabled?: boolean; writesRefused?: boolean; writeRefusalText?: string } = {}): string {
   if (opts.enabled === false) return "";
   const memory = loadMemory(botId);
   const memoryFile = join(workspaceDir(botId), "MEMORY.md");
   const topicDir = join(workspaceDir(botId), "memory");
   if (opts.writesRefused || (opts.fileTools === false && !opts.managedWrites)) {
-    const lead = opts.writesRefused ? NOTES_IN_RESULT : " Your saved memory is supplied as context; this turn has no memory editing tools.";
+    const lead = opts.writesRefused ? (opts.writeRefusalText?.trim() || NOTES_IN_RESULT) : " Your saved memory is supplied as context; this turn has no memory editing tools.";
     if (!memory) return opts.writesRefused ? lead : "";
     return `${lead}\n\nYour memory (MEMORY.md):\n${memory.text}${memory.truncated ? " [Only the initial memory excerpt is visible.]" : ""}${topicIndexBlock(botId, opts.fileTools !== false)}`;
   }

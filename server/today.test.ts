@@ -148,7 +148,11 @@ describe("today's report", () => {
   it("shows a member only the bots they can see", () => {
     const w = seededDay();
     w.store.patchBot(w.pepper.id, { visibility: "admins" });
-    const visible = new VisibleSet(w.store.bots, w.store.groups, { kind: "member", email: "ada@example.test" });
+    const personKey = "p_ada";
+    const atlas = w.store.bots.find((bot) => bot.id === w.atlas.id)!;
+    const ownedThreads = new Set([atlas.threadId, ...(atlas.tasks ?? []).map((task) => task.threadId)]);
+    const visible = new VisibleSet(w.store.bots, w.store.groups, { kind: "member", email: "ada@example.test", personKey }, undefined,
+      (threadId) => ownedThreads.has(threadId) ? personKey : undefined);
     const member: TodayViewer = { admin: false, thread: (id) => visible.thread(id), routine: (run) => routineVisible(run, visible) };
     const report = todayReport(w.sources(), member, MIDNIGHT, NOW);
     expect(new Set(report.lines.map((line) => line.botId))).toEqual(new Set([w.atlas.id]));

@@ -19,9 +19,10 @@ async function serve(
   entries: NotificationLogEntry[] = [sample],
   shown?: (auth: RequestAuth) => (threadId: string) => boolean,
   reaches?: (auth: RequestAuth, entry: NotificationLogEntry) => boolean,
+  visibleThread?: (auth: RequestAuth, threadId: string) => boolean,
 ) {
-  const deps = { recent: vi.fn(() => entries), markRead: vi.fn() };
-  const routes = [createNotificationRoutes(deps, shown, reaches)];
+  const deps = { recent: vi.fn(() => entries), markRead: vi.fn(), markAllRead: vi.fn(), markReadForThreads: vi.fn() };
+  const routes = [createNotificationRoutes({ ...deps, visibleThread }, shown, reaches)];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const handled = await dispatchRoutes(routes, {
@@ -68,6 +69,17 @@ describe("notification routes", () => {
       expect((await fetch(`${base}/api/notifications/${id}/read`, { method: "POST" })).status, id).toBe(404);
     }
     expect(deps.markRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters private-thread notices and scopes member read actions to visible threads", async () => {
+    const { base, deps } = await serve([sample, { ...sample, id: "n2", threadId: "private" }], undefined, undefined, (_auth, threadId) => threadId !== "private");
+    const feed = await (await fetch(`${base}/api/notifications`)).json() as { notifications: NotificationLogEntry[] };
+    expect(feed.notifications.map((notification) => notification.id)).toEqual(["n1"]);
+    expect((await fetch(`${base}/api/notifications/n2/read`, { method: "POST" })).status).toBe(404);
+    expect(deps.markRead).not.toHaveBeenCalled();
+    expect((await fetch(`${base}/api/notifications/n1/read`, { method: "POST" })).status).toBe(200);
+    expect((await fetch(`${base}/api/notifications/read-all`, { method: "POST" })).status).toBe(200);
+    expect(deps.markRead).toHaveBeenLastCalledWith(["n1"]);
   });
 
   it("leaves other paths and methods to the next handler", async () => {

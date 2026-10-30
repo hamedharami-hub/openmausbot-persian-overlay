@@ -82,13 +82,13 @@ describe("VoiceSettings", () => {
     expect(onPatch).not.toHaveBeenCalled();
   });
 
-  it("lays the voice services out as three online ones above the two on this computer", async () => {
+  it("lists online and local voice services", async () => {
     fixture.api.mockResolvedValue({ voices: [] });
     await render(bot("pepper"), vi.fn());
     const radios = [...host.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')];
-    expect(radios.map((radio) => radio.textContent)).toEqual(["ElevenLabs", "Fish Audio", "Grok (xAI)", "Built-in Mac voices", "Chatterbox (local)"]);
+    expect(radios.map((radio) => radio.textContent)).toEqual(["ElevenLabs", "Gemini TTS · API key", "Fish Audio", "Grok (xAI)", "Built-in Mac voices", "Chatterbox (local)"]);
     expect(radios.map((radio) => radio.className.match(/col-span-\d/)?.[0])).toEqual([
-      "col-span-2", "col-span-2", "col-span-2", "col-span-3", "col-span-3",
+      "col-span-2", "col-span-2", "col-span-2", "col-span-2", "col-span-2", "col-span-2",
     ]);
   });
 });

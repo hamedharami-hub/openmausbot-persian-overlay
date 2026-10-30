@@ -42,6 +42,41 @@ class GatheringPeer extends FakePeer {
   finishGathering() { this.iceGatheringState = "complete"; this.waiting?.(); }
 }
 
+class FakeGeminiSocket {
+  static readonly OPEN = 1;
+  static latest: FakeGeminiSocket | null = null;
+  static getLatest() { return this.latest; }
+  readonly sent: string[] = [];
+  readyState = 0;
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onclose: (() => void) | null = null;
+  constructor(readonly url: string) { FakeGeminiSocket.latest = this; }
+  send(data: string) { this.sent.push(data); }
+  open() { this.readyState = FakeGeminiSocket.OPEN; this.onopen?.(); }
+  message(data: unknown) { this.onmessage?.({ data: JSON.stringify(data) }); }
+  close() { this.readyState = 3; this.onclose?.(); }
+}
+
+class FakeGeminiContext {
+  static latest: FakeGeminiContext | null = null;
+  static getLatest() { return this.latest; }
+  readonly sampleRate = 48_000;
+  readonly currentTime = 0;
+  readonly destination = {};
+  processor: { onaudioprocess: ((event: unknown) => void) | null; connect: () => void; disconnect: () => void } | null = null;
+  closed = false;
+  constructor() { FakeGeminiContext.latest = this; }
+  async resume() {}
+  createMediaStreamSource() { return { connect: () => {} }; }
+  createScriptProcessor() {
+    this.processor = { onaudioprocess: null, connect: () => {}, disconnect: () => {} };
+    return this.processor;
+  }
+  async close() { this.closed = true; }
+}
+
 const call = { callId: "c1", botId: "b1", threadId: "t1", client: "desktop", voice: "marin", startedAt: 5, status: "connecting" } as const;
 let peer: FakePeer;
 let track: FakeTrack;
@@ -85,6 +120,57 @@ describe("live call media", () => {
     expect(currentCall()).toBe("b1");
     onServerCall({ ...call, status: "live" });
     expect(liveMedia().phase).toBe("live");
+  });
+
+  it("uses a short-lived Gemini token, streams device PCM, and ends the Gemini lease", async () => {
+    const paths: string[] = [];
+    request.mockImplementation(async (path: string) => {
+      paths.push(path);
+      if (path === "/api/live/gemini/token") return {
+        token: "short-lived-test-token",
+        callId: "gemini-call-1",
+        idleMinutes: 5,
+        setup: { model: "models/gemini-live-test" },
+        initialTurns: [{ role: "user", parts: [{ text: "Continue our chat." }] }],
+      };
+      if (path === "/api/live/gemini/end") return {};
+      throw new Error(`unexpected ${path}`);
+    });
+    FakeGeminiSocket.latest = null;
+    FakeGeminiContext.latest = null;
+    vi.stubGlobal("WebSocket", FakeGeminiSocket);
+    vi.stubGlobal("AudioContext", FakeGeminiContext);
+
+    await startLiveCall({ botId: "b1", threadId: "t1" }, "gemini");
+
+    const socket = FakeGeminiSocket.getLatest();
+    if (!socket) throw new Error("Gemini socket was not created");
+    expect(socket?.url).toContain("access_token=short-lived-test-token");
+    expect(paths).toEqual(["/api/live/gemini/token"]);
+    socket?.open();
+    expect(JSON.parse(socket!.sent[0]!)).toEqual({ setup: { model: "models/gemini-live-test" } });
+    socket?.message({ setupComplete: {} });
+    expect(liveMedia()).toMatchObject({ phase: "live", provider: "gemini", callId: "gemini-call-1" });
+    expect(JSON.parse(socket!.sent[1]!)).toEqual({
+      clientContent: { turns: [{ role: "user", parts: [{ text: "Continue our chat." }] }], turnComplete: true },
+    });
+
+    const input = new Float32Array(4_800).fill(0.25);
+    const output = new Float32Array(2_048);
+    const context = FakeGeminiContext.getLatest();
+    if (!context) throw new Error("Gemini audio context was not created");
+    context.processor?.onaudioprocess?.({
+      inputBuffer: { getChannelData: () => input },
+      outputBuffer: { getChannelData: () => output },
+    });
+    const audioFrame = JSON.parse(socket!.sent[2]!);
+    expect(audioFrame.realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
+    expect(audioFrame.realtimeInput.audio.data).toBeTruthy();
+    expect(output.every((sample) => sample === 0)).toBe(true);
+
+    await hangUpLiveCall();
+    expect(paths).toEqual(["/api/live/gemini/token", "/api/live/gemini/end"]);
+    expect(liveMedia().phase).toBe("idle");
   });
 
   it.each([

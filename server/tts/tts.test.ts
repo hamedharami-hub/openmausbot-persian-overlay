@@ -178,13 +178,16 @@ const cfg = (tts: AppConfig["tts"]): AppConfig => ({ tts });
 
 describe("configuration", () => {
   it("needs both a key and a voice before it can speak", async () => {
-    const { voiceConfigured, voiceReady } = await voice();
+    const { voiceConfigured, voiceReady, voiceProvider, listVoices } = await voice();
+    expect(voiceProvider({})).toBe("gemini");
+    expect(voiceProvider(cfg({ key: "legacy-elevenlabs-key" }))).toBe("elevenlabs");
     expect(voiceConfigured({})).toBe(false);
     expect(voiceConfigured(cfg({ key: "k" }))).toBe(false);
     expect(voiceConfigured(cfg({ voice: "v-1" }))).toBe(false);
     expect(voiceConfigured(cfg({ key: "k", voice: "v-1" }))).toBe(true);
     expect(voiceReady(cfg({ key: "k" }), "v-per-bot")).toBe(true);
     expect(voiceReady({}, "v-per-bot")).toBe(false);
+    expect(await listVoices({})).toHaveLength(30);
   });
 
   it("never reports the key itself", async () => {
@@ -197,18 +200,16 @@ describe("configuration", () => {
   it("distinguishes 'no key' from 'no voice picked'", async () => {
     const { speak, NoVoiceConfigured } = await voice();
     expect(() => speak({}, "hi")).toThrow(NoVoiceConfigured);
-    expect(() => speak({}, "hi")).toThrow(
-      "Add an ElevenLabs key in Settings on the computer to turn on voice.",
-    );
+    expect(() => speak({}, "hi")).toThrow("Add a Gemini API key from Google AI Studio in Settings to use free-tier Gemini voice.");
     expect(() => speak(cfg({ key: "k" }), "hi")).toThrow(
       "Pick a voice in the agent profile.",
     );
   });
 
-  it("lists no voices without a key, rather than calling out", async () => {
+  it("lists static Gemini voice choices without a key or network calls", async () => {
     seen.length = 0;
     const { listVoices } = await voice();
-    expect(await listVoices({})).toEqual([]);
+    expect(await listVoices({})).toHaveLength(30);
     expect(seen).toHaveLength(0);
   });
 });

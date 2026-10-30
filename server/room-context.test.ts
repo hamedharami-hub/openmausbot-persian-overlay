@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_ROOM_COMPACT_AT, roomCompactTokens, RoomContextTracker } from "./room-context.ts";
+import { DEFAULT_ROOM_COMPACT_AT, roomCompactTokens, roomContextBudgetSettings, RoomContextTracker } from "./room-context.ts";
 
 const IDLE_MS = 10 * 60_000;
 
@@ -15,6 +15,12 @@ describe("room context", () => {
     expect(roomCompactTokens(200_000, { autoCompact: false })).toBeNull();
   });
 
+  it("caps each group's auto-compaction target by the selected context budget", () => {
+    expect(roomContextBudgetSettings(200_000, undefined, { mode: "economy" })).toEqual({ roomCompactAt: 45_000 });
+    expect(roomContextBudgetSettings(200_000, { roomCompactAt: 0.5 }, { mode: "balanced" })).toEqual({ roomCompactAt: 90_000 });
+    expect(roomContextBudgetSettings(200_000, { autoCompact: false }, { mode: "economy" })).toEqual({ autoCompact: false });
+  });
+
   it("measures each member per room thread, with the model's window when the driver gave none", () => {
     const rooms = new RoomContextTracker({ idleMs: IDLE_MS });
     rooms.record("room", "scout", { tokens: 0 }, "claude-sonnet-4");
@@ -25,6 +31,23 @@ describe("room context", () => {
       pixel: { tokens: 10_000, window: 50_000 },
     });
     expect(rooms.forThread("other")).toBeUndefined();
+  });
+
+  it("does not reuse a member's measured window after its provider or model changes", () => {
+    const rooms = new RoomContextTracker({ idleMs: IDLE_MS });
+    rooms.dispatched("room", "editor", "provider-large");
+    rooms.record("room", "editor", { tokens: 175_000, window: 200_000 }, "model-large");
+    expect(rooms.forModel("room", "editor", "provider-large", "model-large"))
+      .toEqual({ tokens: 175_000, window: 200_000 });
+    expect(rooms.forModel("room", "editor", "provider-large", "model-small")).toBeUndefined();
+    expect(rooms.forModel("room", "editor", "provider-small", "model-large")).toBeUndefined();
+
+    rooms.dispatched("room", "editor", "provider-small");
+    rooms.record("room", "editor", { tokens: 14_000, window: 16_000 }, "model-small");
+    expect(rooms.forModel("room", "editor", "provider-small", "model-small"))
+      .toEqual({ tokens: 14_000, window: 16_000 });
+    expect(roomContextBudgetSettings(16_000, undefined, { mode: "economy" }))
+      .toEqual({ roomCompactAt: 3_600 });
   });
 
   it("starts the next turn fresh at the threshold, once per reading", () => {

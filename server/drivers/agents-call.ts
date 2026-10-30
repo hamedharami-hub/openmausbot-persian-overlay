@@ -239,6 +239,30 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     const r = await api("/api/internal/room-targets");
     return { text: JSON.stringify(r), ...(r.error ? { isError: true } : {}) };
   }
+  if (name === "propose_project_task") {
+    const title = typeof args.title === "string" ? args.title.trim() : "";
+    const requestId = typeof args.request_id === "string" ? args.request_id.trim() : "";
+    if (!title || title.length > 120 || !requestId || requestId.length > 128) {
+      return { text: "propose_project_task needs a title (1-120 characters) and a stable request_id (1-128 characters). Reuse the same request_id when retrying.", isError: true };
+    }
+    const body: Json = { title, requestId };
+    const { ok, status, body: result } = await apiResponse("/api/internal/company/proposals", { method: "POST", body: JSON.stringify(body) });
+    if (!ok) return { text: String(result.error ?? `Project task proposal failed (HTTP ${status}).`), isError: true };
+    const task = jsonRecord(result.task) ? result.task : {};
+    return { text: `Proposal recorded as pending for project ${String(result.projectId ?? "?")} (task ${String(task.id ?? "?")}). It does not execute any work until the project chief or person decides it.` };
+  }
+  if (name === "decide_project_task") {
+    const projectId = typeof args.project_id === "string" ? args.project_id.trim() : "";
+    const taskId = typeof args.task_id === "string" ? args.task_id.trim() : "";
+    if (!projectId || !taskId || !Number.isSafeInteger(args.expected_revision) || Number(args.expected_revision) < 0 || typeof args.accept !== "boolean") {
+      return { text: "decide_project_task needs project_id, task_id, a non-negative expected_revision, and accept=true or false.", isError: true };
+    }
+    const path = `/api/internal/company/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/decision`;
+    const { ok, status, body: result } = await apiResponse(path, { method: "POST", body: JSON.stringify({ expectedRevision: args.expected_revision, accept: args.accept }) });
+    if (!ok) return { text: String(result.error ?? `Project task decision failed (HTTP ${status}).`), isError: true };
+    const task = jsonRecord(result.task) ? result.task : {};
+    return { text: `Proposal ${String(task.id ?? taskId)} was ${args.accept ? "accepted onto the project board" : "rejected"}. This decision did not assign a teammate or start any work.` };
+  }
   if (name === "coordinate_bots") {
     const canonical: Json = { ...args };
     delete canonical.botIds;

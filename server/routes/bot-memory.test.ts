@@ -1,24 +1,29 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { json, onJsonBody, readBody } from "../harness/http.ts";
 import { recordMemoryChange } from "../memory-journal.ts";
-import { commitLearned, planLearned } from "../profile-learned.ts";
-import { requiredScope } from "../request-auth.ts";
+import { commitLearned, listLearnedFacts, planLearned } from "../profile-learned.ts";
+import { DATA_DIR } from "../config.ts";
+import { requiredScope, type RequestAuth } from "../request-auth.ts";
 import { launchVerificationServer, type VerificationServer } from "../../scripts/control-omb.ts";
 import { createBotMemoryRoutes, type BotMemoryRouteDeps } from "./bot-memory.ts";
 import { dispatchRoutes } from "./table.ts";
 
 const BOTS: Record<string, { id: string }> = { "bot-123": { id: "bot-123" } };
 const servers: Server[] = [];
+const learnedTestKeys = [`p_${"c".repeat(22)}`, `p_${"d".repeat(22)}`];
+const memberAuth: RequestAuth = { kind: "session", via: "bearer", scopes: ["client"], session: { id: "member", tokenHash: "fixture", createdAt: Date.now(), lastSeenAt: Date.now(), scopes: ["client"], label: "member", expiresAt: Date.now() + 60_000 } };
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise((done) => server.close(done))));
+  for (const key of learnedTestKeys) rmSync(join(DATA_DIR, "profile-learned", `${key}.json`), { force: true });
 });
 
 /** As index.ts runs the table: hooks may be installed before dispatchRoutes, and anything passed on falls to a stand-in. */
-async function serve(deps: Partial<BotMemoryRouteDeps> = {}, beforeDispatch?: (res: import("node:http").ServerResponse) => void): Promise<string> {
+async function serve(deps: Partial<BotMemoryRouteDeps> = {}, beforeDispatch?: (res: import("node:http").ServerResponse) => void, auth: RequestAuth = { kind: "loopback", scopes: ["admin"] }): Promise<string> {
   const routes = [createBotMemoryRoutes({
     bot: (id) => BOTS[id], taskByThread: () => undefined,
     upkeep: { status: () => ({ modelSteps: false }), tidy: async () => { throw new Error("unexpected tidy"); } },
@@ -31,7 +36,7 @@ async function serve(deps: Partial<BotMemoryRouteDeps> = {}, beforeDispatch?: (r
     try {
       const handled = await dispatchRoutes(routes, {
         req, res, url, path: url.pathname, method: req.method ?? "GET",
-        auth: { kind: "loopback", scopes: ["admin"] }, json, readBody,
+        auth, json, readBody,
       });
       if (!handled) json(res, 404, { from: "inline routes" });
     } catch (error) {
@@ -111,6 +116,26 @@ describe("the bot-memory module through the route table", () => {
     expect(tidied).toEqual(["bot-123"]);
   });
 
+  it("lets a member read shared bot memory but refuses every API write to it", async () => {
+    const base = await serve({ canWriteMemory: () => false }, undefined, memberAuth);
+    const request = (method: string, path: string, body?: unknown) => fetch(`${base}${path}`, {
+      method,
+      ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
+    });
+    expect((await request("GET", "/api/bots/bot-123/memory")).status).toBe(200);
+    for (const [method, path, body] of [
+      ["PUT", "/api/bots/bot-123/memory", { text: "member overwrite" }],
+      ["PUT", "/api/bots/bot-123/memory/file", { path: "MEMORY.md", text: "member overwrite" }],
+      ["DELETE", "/api/bots/bot-123/memory/file?path=MEMORY.md"],
+      ["POST", "/api/bots/bot-123/memory/journal/e1/revert"],
+      ["POST", "/api/bots/bot-123/memory/tidy"],
+    ] as Array<[string, string, unknown?]>) {
+      const response = await request(method, path, body);
+      expect(response.status, `${method} ${path}`).toBe(403);
+      expect(await response.json()).toMatchObject({ error: expect.stringContaining("workspace owner") });
+    }
+  });
+
   it("removes learned facts through the current About me and save seams", async () => {
     const facts = planLearned({ botId: "bot-123", botName: "Memo" }, ["Prefers tea"], "", "2026-09-28");
     commitLearned(facts);
@@ -124,6 +149,25 @@ describe("the bot-memory module through the route table", () => {
     expect(await removed.json()).toEqual({ ok: true, aboutMe: "Handwritten note", learned: [] });
     expect((await remove()).status).toBe(404);
     expect(saved).toEqual(["Handwritten note"]);
+  });
+
+  it("reads and removes only the authenticated account's learned facts", async () => {
+    const [memberKey, otherKey] = learnedTestKeys;
+    const memberFacts = planLearned({ botId: "bot-123", botName: "Memo" }, ["Member preference"], "", "2026-09-28", 1, memberKey);
+    const otherFacts = planLearned({ botId: "bot-123", botName: "Memo" }, ["Other account secret"], "", "2026-09-28", 2, otherKey);
+    commitLearned(memberFacts, memberKey);
+    commitLearned(otherFacts, otherKey);
+    let aboutMe = memberFacts[0]!.line;
+    const auth = memberAuth;
+    const base = await serve({ profileMemory: (requestAuth) => requestAuth.kind === "session" && requestAuth.session.id === "member" ? {
+      scopeKey: memberKey, includeLegacy: false, aboutMe: () => aboutMe, saveAboutMe: (text) => { aboutMe = text; },
+    } : null }, undefined, auth);
+    expect(await (await fetch(`${base}/api/profile/learned`)).json()).toEqual({ learned: memberFacts });
+    const removed = await fetch(`${base}/api/profile/learned/${memberFacts[0]!.id}/remove`, { method: "POST" });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ ok: true, aboutMe: "", learned: [] });
+    expect(listLearnedFacts(memberKey)).toEqual([]);
+    expect(listLearnedFacts(otherKey)).toEqual(otherFacts);
   });
 
   it("keeps a learned fact retryable when saving About me fails", async () => {
@@ -183,7 +227,7 @@ describe("the bot-memory module through the route table", () => {
     expect(await response.json()).toMatchObject({ botId: "bot-123", narrowed: true });
   });
 
-  it("is admin-scoped by path in request-auth.ts, every arm of it", () => {
+  it("keeps bot memory administration behind admin scope", () => {
     for (const [method, path] of [
       ["GET", "/api/bots/b1/memory"],
       ["PUT", "/api/bots/b1/memory"],
@@ -194,8 +238,6 @@ describe("the bot-memory module through the route table", () => {
       ["POST", "/api/bots/b1/memory/journal/e1/revert"],
       ["GET", "/api/bots/b1/memory/upkeep"],
       ["POST", "/api/bots/b1/memory/tidy"],
-      ["GET", "/api/profile/learned"],
-      ["POST", "/api/profile/learned/e1/remove"],
       ["POST", "/api/bots/b1/memory/open"],
     ] as const) {
       expect(requiredScope(method, path), `${method} ${path}`).toBe("admin");
@@ -215,8 +257,6 @@ describe("the bot-memory family behind the gate on a real server", () => {
     ["POST", "/api/bots/b1/memory/journal/e1/revert"],
     ["GET", "/api/bots/b1/memory/upkeep"],
     ["POST", "/api/bots/b1/memory/tidy"],
-    ["GET", "/api/profile/learned"],
-    ["POST", "/api/profile/learned/e1/remove"],
     ["POST", "/api/bots/b1/memory/open", { target: "folder" }],
   ];
   const call = async (method: string, path: string, body: unknown, headers: Record<string, string> = {}) => {
@@ -243,9 +283,13 @@ describe("the bot-memory family behind the gate on a real server", () => {
       const status = await call(method, path, body, { origin: "https://elsewhere.example.test" });
       expect([401, 403], `${method} ${path}`).toContain(status);
     }
+    for (const [method, path] of [["GET", "/api/profile/learned"], ["POST", "/api/profile/learned/e1/remove"]] as const) {
+      const status = await call(method, path, method === "GET" ? undefined : {}, { origin: "https://elsewhere.example.test" });
+      expect([401, 403], `${method} ${path}`).toContain(status);
+    }
   });
 
-  it("refuses every arm for a chat-only paired session: admin scope, keyed by path", async () => {
+  it("refuses bot-memory administration for a chat-only paired session", async () => {
     // A pairing opened without scopes grants both, so ask for chat only.
     const opened = await fetch(`${fixture.info.url}/api/auth/pairing`, { method: "POST", headers: { "content-type": "application/json", origin: fixture.info.url }, body: JSON.stringify({ scopes: ["client"] }) });
     expect(opened.status).toBe(200);
@@ -261,5 +305,7 @@ describe("the bot-memory family behind the gate on a real server", () => {
       const status = await call(method, path, body, { authorization: `Bearer ${token}`, origin: fixture.info.url });
       expect(status, `${method} ${path}`).toBe(403);
     }
+    expect(await call("GET", "/api/profile/learned", undefined, { authorization: `Bearer ${token}`, origin: fixture.info.url })).toBe(200);
+    expect(await call("POST", "/api/profile/learned/e1/remove", {}, { authorization: `Bearer ${token}`, origin: fixture.info.url })).toBe(404);
   });
 });

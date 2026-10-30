@@ -28,4 +28,21 @@ describe("extractMcpImages", () => {
     ];
     expect(extractMcpImages(content)).toEqual([{ data: "def456", mimeType: "image/jpeg" }]);
   });
+
+  it("extracts OpenCode ACP tool-result images from content blocks", () => {
+    const result = [
+      { type: "content", content: { type: "text", text: "Generated image" } },
+      { type: "content", content: { type: "image", data: "jpeg-bytes", mimeType: "image/jpeg" } },
+    ];
+    expect(extractMcpImages(result)).toEqual([{ type: "image", data: "jpeg-bytes", mimeType: "image/jpeg" }]);
+  });
+
+  it("does not interpret arbitrary nested objects, resource links or malformed ACP content as images", () => {
+    expect(extractMcpImages([
+      { type: "resource_link", content: { type: "image", data: "private", mimeType: "image/png" } },
+      { type: "content", content: null },
+      { type: "content", content: { type: "image", data: 123, mimeType: "image/png" } },
+      { type: "content", content: { type: "content", content: { type: "image", data: "nested", mimeType: "image/png" } } },
+    ])).toEqual([]);
+  });
 });

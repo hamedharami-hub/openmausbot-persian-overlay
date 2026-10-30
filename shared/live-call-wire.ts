@@ -46,14 +46,18 @@ export interface LiveCallRecord {
 }
 
 /** `live`: the key saved for Live calls only; `openai`: the OpenAI API key from Settings → API keys, used when there is no `live` key. */
-export type LiveKeySource = "live" | "openai";
+export type LiveKeySource = "live" | "openai" | "gemini";
 
 /** Non-secret Live settings, as GET /api/config and PATCH /api/live/settings report them. */
 export interface LiveSettings {
   /** A Live call has a key to use (`keySource` says which); never the key itself. */
   configured: boolean;
+  /** Absent on older servers; clients default to OpenAI. */
+  provider?: "openai" | "gemini";
+  geminiConfigured?: boolean;
   keySource?: LiveKeySource;
   voice: string;
+  geminiVoice?: string;
   readTypedReplies: boolean;
   idleMinutes: number;
 }

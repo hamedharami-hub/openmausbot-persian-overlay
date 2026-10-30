@@ -115,7 +115,11 @@ const RTL_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\
 
 export function textDirection(value: string): "rtl" | "ltr" {
   const strong = /\p{Letter}/u.exec(value);
-  return strong && RTL_LETTER.test(strong[0]) ? "rtl" : "ltr";
+  if (!strong) return "ltr";
+  if (RTL_LETTER.test(strong[0])) return "rtl";
+  const words = value.match(/[\p{Letter}\p{Mark}]+/gu) ?? [];
+  const rtlWords = words.filter((word) => [...word].some((letter) => RTL_LETTER.test(letter))).length;
+  return rtlWords >= 2 && rtlWords * 3 >= words.length - rtlWords ? "rtl" : "ltr";
 }
 
 interface HastNode {
@@ -654,6 +658,9 @@ const MARKDOWN_COMPONENTS: Components = {
   },
   p({ node, children }: BlockProps) {
     return <p dir={blockDirection(node)}>{children}</p>;
+  },
+  li({ node, children }: BlockProps) {
+    return <li dir={blockDirection(node)}>{children}</li>;
   },
   ul({ node, children }: BlockProps) {
     return <ul dir={blockDirection(node)} className="list-disc space-y-1 ps-5">{children}</ul>;

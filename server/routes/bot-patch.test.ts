@@ -45,10 +45,19 @@ function fixture() {
   const bot = store.createBot({ name: "Scout" });
   const cfg = { vps: { sshAlias: "production-vps" } } as AppConfig;
   const activeVpsThreads = new Set<string>();
+  const availableFallbacks = new Set(["backup:fast", "backup:deep", "backup:balanced", "other:reasoner", "other:legacy", "claude:claude-sonnet-5"]);
   // Only what a vpsAlias patch touches; any other dependency is absent, and a route that reached for one would throw.
   const deps = {
     store,
     cfg,
+    registry: { get: (instanceId: string) => instanceId === "backup" || instanceId === "other" || instanceId === "claude" ? { instanceId } : null },
+    checkedModelSelection: (raw: unknown) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false as const, status: 400, error: "invalid model" };
+      const selection = raw as ModelSelection;
+      return availableFallbacks.has(`${selection.instanceId}:${selection.model}`)
+        ? { ok: true as const, selection }
+        : { ok: false as const, status: 400, error: "model is unavailable" };
+    },
     requestedTaskBot: () => null,
     activeVpsThreads,
     wireBot: (record: BotRecord) => record as unknown as WireBot,
@@ -320,5 +329,43 @@ describe("PATCH /api/bots/:id phoneApps", () => {
     expect(client.status).toBe(403);
     expect(paired.status).toBe(403);
     expect(store.bot(bot.id)?.phoneApps).toBeUndefined();
+  });
+});
+
+describe("PATCH /api/bots/:id fallback chain", () => {
+  it("allows up to four distinct models from the same account and rejects invalid or primary entries", async () => {
+    const { store, bot, patch } = fixture();
+    const chain = [
+      { instanceId: "backup", model: "fast" },
+      { instanceId: "backup", model: "deep" },
+      { instanceId: "backup", model: "balanced" },
+      { instanceId: "other", model: "reasoner" },
+    ];
+    const saved = await patch(bot.id, { fallback: chain });
+    expect(saved.status).toBe(200);
+    expect(store.bot(bot.id)?.fallback).toEqual(chain);
+
+    const duplicate = await patch(bot.id, { fallback: [chain[0], chain[0]] });
+    expect(duplicate.status).toBe(400);
+    const primary = await patch(bot.id, { fallback: [{ instanceId: "claude", model: "claude-sonnet-5" }] });
+    expect(primary.status).toBe(400);
+    const fifth = await patch(bot.id, { fallback: [...chain, { instanceId: "backup", model: "fifth" }] });
+    expect(fifth.status).toBe(400);
+    expect(store.bot(bot.id)?.fallback).toEqual(chain);
+  });
+
+  it("retains an existing legacy fifth entry until the owner changes that chain", async () => {
+    const { store, bot, patch } = fixture();
+    const legacy = [
+      { instanceId: "backup", model: "fast" },
+      { instanceId: "backup", model: "deep" },
+      { instanceId: "backup", model: "balanced" },
+      { instanceId: "other", model: "reasoner" },
+      { instanceId: "other", model: "legacy" },
+    ];
+    store.patchBot(bot.id, { fallback: legacy });
+    const saved = await patch(bot.id, { fallback: legacy });
+    expect(saved.status).toBe(200);
+    expect(store.bot(bot.id)?.fallback).toEqual(legacy);
   });
 });

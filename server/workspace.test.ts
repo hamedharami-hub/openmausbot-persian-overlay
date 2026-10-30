@@ -467,6 +467,18 @@ describe("workspace", () => {
     expect(REMEMBER_AND_FORGET).toContain("call memory_update with action forget");
   });
 
+  it("uses a scope-specific refusal when a private account turn cannot write shared bot memory", () => {
+    const prompt = memorySystemPrompt(BOT, {
+      managedWrites: true,
+      fileTools: true,
+      writesRefused: true,
+      writeRefusalText: "Private account notes belong in the account profile.",
+    });
+    expect(prompt).toContain("Private account notes belong in the account profile.");
+    expect(prompt).not.toContain("on this Cloud");
+    expect(prompt).not.toContain("Change MEMORY.md only with memory_update");
+  });
+
   it("requires explicit remove to delete a memory passage", () => {
     writeMemoryFile(BOT, "Keep this unique fact.");
     for (const text of ["", " \n\t "]) {

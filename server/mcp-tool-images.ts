@@ -25,7 +25,14 @@ const asAnthropicImage = (c: unknown): McpImageContent | null => {
     : null;
 };
 
-const asImageBlock = (c: unknown): McpImageContent | null => asMcpImage(c) ?? asAnthropicImage(c);
+const asImageBlock = (c: unknown): McpImageContent | null => {
+  const direct = asMcpImage(c) ?? asAnthropicImage(c);
+  if (direct) return direct;
+  // ACP wraps tool-result content blocks; OpenCode 1.19.4 uses this shape for MCP images.
+  const nested = (c as { type?: unknown; content?: unknown } | null)?.type === "content"
+    ? (c as { content?: unknown }).content : null;
+  return asMcpImage(nested) ?? asAnthropicImage(nested);
+};
 
 export function extractMcpImages(value: unknown): McpImageContent[] {
   const arr = Array.isArray(value)

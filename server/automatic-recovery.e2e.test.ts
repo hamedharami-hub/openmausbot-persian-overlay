@@ -286,6 +286,39 @@ it("uses the ordered bot list only for proven pre-prompt failures and leaves def
   });
 }, 90_000);
 
+it("uses a thread's fallback override instead of the bot chain during pre-prompt recovery", async () => {
+  await withRecoveryFixture({}, async ({ api, control, calls, backupPrompts, evidence }) => {
+    const { bot } = await control("new-bot", "--name", "Thread fallback override");
+    const threadId = bot.activeTaskId;
+    const route = `/api/bots/${bot.id}/tasks/${threadId}`;
+    await api("PATCH", route, { modelSelection: primary, updateBotDefault: true });
+    const { task: sibling } = await api("POST", `/api/bots/${bot.id}/tasks`, { title: "Inherits bot fallback" });
+    await api("PATCH", `/api/bots/${bot.id}`, {
+      fallback: [{ instanceId: "secondary", model: primary.model }, backup],
+    });
+    await api("PATCH", route, { fallback: [backup] });
+
+    const text = "THREAD_OVERRIDE_RECOVERY_5K";
+    await control("send", "--bot", bot.id, "--task", threadId, "--text", text);
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("settled");
+
+    expect(calls().filter((call) => call.method === "initialize.error")).toHaveLength(1);
+    expect(calls().filter((call) => call.method === "session/prompt")).toHaveLength(0);
+    expect(backupPrompts()).toHaveLength(1);
+    const state = (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === bot.id);
+    expect(state).toMatchObject({ modelSelection: primary });
+    expect(state.tasks.find((task: any) => task.threadId === threadId)).toMatchObject({
+      modelSelection: backup, fallback: [backup], busy: false,
+    });
+    expect(state.tasks.find((task: any) => task.threadId === sibling.threadId)).toMatchObject({ modelSelection: primary });
+    expect(state.tasks.find((task: any) => task.threadId === sibling.threadId).fallback).toBeUndefined();
+    const { messages } = await control("messages", "--bot", bot.id, "--task", threadId, "--limit", "30");
+    expect(messages.filter((message: any) => message.role === "user" && message.text === text)).toHaveLength(1);
+    expect(messages.filter((message: any) => message.tool?.name?.startsWith("recovery:")).map((message: any) => message.tool.name)).toHaveLength(1);
+    evidence.push({ state, messages });
+  });
+}, 90_000);
+
 it.each([
   { name: "disabled", enabled: false },
   { name: "prompt already accepted", method: "session/prompt" },

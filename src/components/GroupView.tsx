@@ -201,9 +201,9 @@ function RoomTextMessage({
     </MessageActions>
   );
   return (
-    <div {...{ [MESSAGE_ROW]: "" }} className={cn("group flex w-full flex-col", user ? "items-end" : "items-start")}>
+    <div {...{ [MESSAGE_ROW]: "" }} data-message-role={user ? "user" : "assistant"} className={cn("group flex w-full flex-col", user ? "items-end" : "items-start")}>
       {speaker && <div className="mb-0.5 px-1 text-[12px] font-medium text-ink-secondary">{speaker}</div>}
-      <div className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
+      <div data-message-line className={cn("flex w-full items-end gap-1.5", user ? "justify-end" : "justify-start")}>
         {user && (
           <MessageActions side="user" menu={userMessageMenu({ messageId: m.id, pin })}>
             <ReplyAction onReply={() => onReply(m)} />

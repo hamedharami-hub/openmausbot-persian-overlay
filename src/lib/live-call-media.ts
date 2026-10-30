@@ -31,6 +31,7 @@ export interface LiveMediaState {
   hangingUp: boolean;
   /** The notice is the computer refusing the microphone: it comes with Open System Settings. */
   micSettings?: boolean;
+  provider?: "openai" | "gemini";
 }
 
 export interface LiveMediaDeps {
@@ -93,6 +94,14 @@ let deps: LiveMediaDeps = defaults;
 let state: LiveMediaState = IDLE;
 let generation = 0;
 let microphone: MediaStream | null = null;
+let geminiSocket: WebSocket | null = null;
+let geminiAudioContext: AudioContext | null = null;
+let geminiProcessor: ScriptProcessorNode | null = null;
+let geminiOutputSources = new Set<AudioBufferSourceNode>();
+let geminiOutputTime = 0;
+let geminiLeaseCallId: string | null = null;
+let geminiReady = false;
+let geminiSessionTimer: ReturnType<typeof setTimeout> | null = null;
 let peer: RTCPeerConnection | null = null;
 let channel: RTCDataChannel | null = null;
 let heardTimer: ReturnType<typeof setTimeout> | null = null;
@@ -177,12 +186,235 @@ function liveClient(capabilities: DesktopCapabilities): "desktop" | "web" {
   return inWebBrowser(capabilities) ? "web" : "desktop";
 }
 
-export async function startLiveCall(target: { botId: string; threadId: string }): Promise<void> {
+type GeminiLiveResponse = {
+  token: string;
+  callId: string;
+  idleMinutes: number;
+  setup: Record<string, unknown>;
+  initialTurns: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
+};
+
+type GeminiLiveServerMessage = {
+  error?: { message?: string };
+  setupComplete?: unknown;
+  serverContent?: {
+    inputTranscription?: { text?: string };
+    interimInputTranscription?: { text?: string };
+    outputTranscription?: { text?: string };
+    interrupted?: boolean;
+    turnComplete?: boolean;
+    modelTurn?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> };
+  };
+  toolCall?: { functionCalls?: Array<{ id?: string; name?: string; args?: unknown }> };
+};
+
+export function downsampleToPcm16(input: Float32Array, inputRate: number, outputRate = 16_000): Uint8Array {
+  const ratio = inputRate / outputRate;
+  const length = Math.floor(input.length / ratio);
+  const pcm = new Uint8Array(length * 2);
+  const view = new DataView(pcm.buffer);
+  for (let index = 0; index < length; index += 1) {
+    const start = Math.floor(index * ratio);
+    const end = Math.min(Math.floor((index + 1) * ratio), input.length);
+    let total = 0;
+    for (let sample = start; sample < end; sample += 1) total += input[sample] ?? 0;
+    const average = end > start ? total / (end - start) : 0;
+    const clamped = Math.max(-1, Math.min(1, average));
+    view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  }
+  return pcm;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function sendGeminiRealtimeAudio(mine: number, input: Float32Array, sampleRate: number) {
+  if (mine !== generation || !geminiReady || state.muted || geminiSocket?.readyState !== WebSocket.OPEN) return;
+  const bytes = downsampleToPcm16(input, sampleRate);
+  if (!bytes.byteLength) return;
+  geminiSocket.send(JSON.stringify({ realtimeInput: { audio: { data: bytesToBase64(bytes), mimeType: "audio/pcm;rate=16000" } } }));
+}
+
+function scheduleGeminiAudio(base64: string, mimeType: string) {
+  const context = geminiAudioContext;
+  if (!context) return;
+  const match = /rate=(\d+)/i.exec(mimeType);
+  const sampleRate = match ? Number(match[1]) : 24_000;
+  const bytes = base64ToBytes(base64);
+  if (bytes.byteLength < 2 || bytes.byteLength % 2) return;
+  const pcm = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+  const buffer = context.createBuffer(1, pcm.length, sampleRate);
+  const channelData = buffer.getChannelData(0);
+  for (let index = 0; index < pcm.length; index += 1) channelData[index] = pcm[index]! / 32768;
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  const startAt = Math.max(context.currentTime + 0.02, geminiOutputTime);
+  source.onended = () => { geminiOutputSources.delete(source); try { source.disconnect(); } catch {} };
+  geminiOutputSources.add(source);
+  source.start(startAt);
+  geminiOutputTime = startAt + buffer.duration;
+}
+
+function interruptGeminiAudio() {
+  for (const source of geminiOutputSources) {
+    try { source.stop(); } catch {}
+    try { source.disconnect(); } catch {}
+  }
+  geminiOutputSources.clear();
+  geminiOutputTime = geminiAudioContext?.currentTime ?? 0;
+}
+
+function handleGeminiMessage(mine: number, raw: unknown) {
+  if (mine !== generation) return;
+  let message: GeminiLiveServerMessage;
+  try { message = JSON.parse(String(raw)) as GeminiLiveServerMessage; } catch { return; }
+  if (message.error) return void finish({ text: "Gemini Live ended unexpectedly.", dropped: true }, "Gemini Live returned an error. Check the key and Google AI Studio quota.");
+  const server = message.serverContent;
+  if (server && typeof server === "object") {
+    const inputText = typeof server.inputTranscription?.text === "string" ? server.inputTranscription.text :
+      typeof server.interimInputTranscription?.text === "string" ? server.interimInputTranscription.text : "";
+    const outputText = typeof server.outputTranscription?.text === "string" ? server.outputTranscription.text : "";
+    if (inputText || outputText) {
+      set({
+        ...(inputText ? { heard: inputText.slice(-HEARD_CHARS) } : {}),
+        ...(outputText ? { caption: (state.caption + outputText).slice(-CAPTION_CHARS), heard: "" } : {}),
+      });
+    }
+    if (server.interrupted) interruptGeminiAudio();
+    const parts = server.modelTurn?.parts;
+    if (Array.isArray(parts)) {
+      for (const part of parts) {
+        if (typeof part.inlineData?.data === "string") scheduleGeminiAudio(part.inlineData.data, part.inlineData.mimeType ?? "audio/pcm;rate=24000");
+      }
+    }
+    if (server.turnComplete && state.phase === "starting") set({ phase: "live", startedAt: Date.now() });
+  }
+  const functions = message.toolCall?.functionCalls;
+  if (Array.isArray(functions) && functions.length) void respondToGeminiTools(mine, functions);
+}
+
+async function respondToGeminiTools(mine: number, functions: Array<{ id?: string; name?: string; args?: unknown }>) {
+  const responses = [];
+  for (const call of functions) {
+    if (call.name !== "delegate_to_openmausbot" || !call.id) {
+      if (call.id && call.name) responses.push({ id: call.id, name: call.name, response: { error: "Unsupported tool." } });
+      continue;
+    }
+    const textValue = call.args && typeof call.args === "object" ? (call.args as Record<string, unknown>).text : undefined;
+    const task = typeof textValue === "string" ? textValue.trim().slice(0, 3_000) : "";
+    try {
+      if (!task || !state.botId || !state.threadId) throw new Error("The task was empty.");
+      const callId = geminiLeaseCallId;
+      if (!callId) throw new Error("The Live session ended.");
+      const result = await deps.request<{ accepted?: boolean; queued?: boolean; error?: string }>("/api/live/gemini/delegate", {
+        method: "POST",
+        body: JSON.stringify({ callId, botId: state.botId, threadId: state.threadId, text: task }),
+        timeoutMs: 20_000,
+      });
+      responses.push({ id: call.id, name: call.name, response: { accepted: result.accepted === true, queued: result.queued === true } });
+    } catch {
+      responses.push({ id: call.id, name: call.name, response: { accepted: false, error: "The OpenMausBot agent did not accept the task. Check the chat for status." } });
+    }
+  }
+  if (mine === generation && geminiSocket?.readyState === WebSocket.OPEN && responses.length) {
+    geminiSocket.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+  }
+}
+
+async function startGeminiLiveCall(target: { botId: string; threadId: string }): Promise<void> {
+  if (isLiveCallRunning(state.phase)) return;
+  release();
+  const mine = ++generation;
+  geminiReady = false;
+  set({ ...IDLE, phase: "starting", botId: target.botId, threadId: target.threadId, provider: "gemini" });
+  startCall(target.botId);
+  try {
+    const stream = await deps.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (mine !== generation) return void stream.getTracks().forEach((track) => track.stop());
+    microphone = stream;
+    for (const track of stream.getAudioTracks()) track.enabled = !state.muted;
+    if (typeof AudioContext === "undefined" || typeof WebSocket === "undefined") throw new LiveUnsupportedError(t("call.live.unsupported"));
+    const context = new AudioContext();
+    geminiAudioContext = context;
+    await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(2048, 1, 1);
+    geminiProcessor = processor;
+    processor.onaudioprocess = (event) => {
+      sendGeminiRealtimeAudio(mine, event.inputBuffer.getChannelData(0), context.sampleRate);
+      event.outputBuffer.getChannelData(0).fill(0);
+    };
+    source.connect(processor);
+    processor.connect(context.destination);
+    const result = await deps.request<GeminiLiveResponse>("/api/live/gemini/token", {
+      method: "POST", body: JSON.stringify({ botId: target.botId, threadId: target.threadId }), timeoutMs: 20_000,
+    });
+    if (mine !== generation) {
+      await deps.request("/api/live/gemini/end", { method: "POST", body: JSON.stringify({ callId: result.callId }), timeoutMs: 5_000 }).catch(() => undefined);
+      return;
+    }
+    geminiLeaseCallId = result.callId;
+    set({ callId: result.callId });
+    geminiSessionTimer = setTimeout(() => {
+      if (mine === generation) finish({ text: t("call.live.gemini.endedExpired"), dropped: false });
+    }, 14 * 60_000 + 50_000);
+    const socket = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(result.token)}`);
+    geminiSocket = socket;
+    socket.onopen = () => {
+      if (mine !== generation) return;
+      socket.send(JSON.stringify({ setup: result.setup }));
+    };
+    socket.onmessage = (event) => {
+      if (mine !== generation) return;
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(String(event.data)) as Record<string, unknown>; } catch { return; }
+      if (data.setupComplete) {
+        socket.send(JSON.stringify({ clientContent: { turns: result.initialTurns, turnComplete: true } }));
+        geminiReady = true;
+        set({ phase: "live", startedAt: Date.now() });
+        return;
+      }
+      handleGeminiMessage(mine, event.data);
+    };
+    socket.onerror = () => {
+      if (mine === generation) void dropped("Gemini Live connection failed.");
+    };
+    socket.onclose = () => {
+      if (mine === generation && state.phase !== "ending" && isLiveCallRunning(state.phase)) void dropped("Gemini Live connection closed.");
+    };
+  } catch (error) {
+    if (mine !== generation) return;
+    release();
+    const body = error instanceof ApiError ? error.body as { needsKey?: boolean } | undefined : undefined;
+    if (body?.needsKey) return set({ ...IDLE, needsKey: true, botId: target.botId, threadId: target.threadId, provider: "gemini" });
+    if (error instanceof DOMException && error.name === "NotFoundError") return set({ ...IDLE, phase: "failed", botId: target.botId, threadId: target.threadId, provider: "gemini", notice: t("call.live.micMissing"), action: "retry" });
+    if (error instanceof DOMException && error.name === "NotAllowedError") {
+      const pageMic = await deps.pageMicrophone();
+      if (mine !== generation) return;
+      return set({ ...IDLE, phase: "failed", botId: target.botId, threadId: target.threadId, provider: "gemini", ...micBlocked(deps.capabilities(), pageMic) });
+    }
+    set({ ...IDLE, phase: "failed", botId: target.botId, threadId: target.threadId, provider: "gemini", action: error instanceof LiveUnsupportedError ? null : "retry", notice: error instanceof Error ? error.message : "Gemini Live could not start." });
+  }
+}
+
+export async function startLiveCall(target: { botId: string; threadId: string }, provider: "openai" | "gemini" = "openai"): Promise<void> {
+  if (provider === "gemini") return startGeminiLiveCall(target);
   if (isLiveCallRunning(state.phase)) return;
   release();
   const mine = ++generation;
   serverAttached = false;
-  set({ ...IDLE, phase: "starting", botId: target.botId, threadId: target.threadId });
+  set({ ...IDLE, phase: "starting", botId: target.botId, threadId: target.threadId, provider: "openai" });
   startCall(target.botId);
   try {
     const stream = await deps.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -261,14 +493,20 @@ export async function startLiveCall(target: { botId: string; threadId: string })
 }
 
 export async function hangUpLiveCall(): Promise<void> {
-  const { callId, phase } = state;
+  const { callId, phase, provider } = state;
   if (phase === "idle" || phase === "ended" || phase === "failed") return dismissLiveNotice();
   const mine = ++generation;
   set({ phase: "ending", hangingUp: true });
   // Stop capturing now; keep the channel alive until its close command and the end request leave.
   stopCapturing();
-  sendClose();
-  if (callId) await endOnServer(callId);
+  if (provider === "gemini") {
+    try { geminiSocket?.close(); } catch {}
+    geminiLeaseCallId = null;
+    if (callId) await endGeminiOnServer(callId);
+  } else {
+    sendClose();
+    if (callId) await endOnServer(callId);
+  }
   if (mine !== generation) return;
   release();
   set({ ...IDLE });
@@ -309,9 +547,9 @@ export function dismissStartPrompt(botId: string): void {
 }
 
 export function takeLiveCallAction(): void {
-  const { action, botId, threadId, phase } = state;
+  const { action, botId, threadId, phase, provider } = state;
   if (phase !== "failed") return;
-  if (action === "retry" && botId && threadId) void startLiveCall({ botId, threadId });
+  if (action === "retry" && botId && threadId) void startLiveCall({ botId, threadId }, provider ?? "openai");
   else if (action === "open-in-browser" && globalThis.location?.href) deps.openInBrowser(globalThis.location.href);
 }
 
@@ -379,13 +617,18 @@ function endQuietly() {
 }
 
 function finish(notice: { text: string; dropped: boolean }, detail?: string) {
-  sendClose();
-  release();
+  const { callId, botId, threadId, provider } = state;
+  if (provider === "gemini") {
+    const lease = geminiLeaseCallId ?? callId;
+    geminiLeaseCallId = null;
+    if (lease) void endGeminiOnServer(lease);
+    try { geminiSocket?.close(); } catch {}
+  } else sendClose();
   generation += 1;
-  const { botId, threadId } = state;
+  release();
   set({
     ...IDLE, phase: notice.dropped ? "failed" : "ended", botId, threadId,
-    notice: detail?.trim() || notice.text, action: notice.dropped ? "retry" : null,
+    provider, notice: detail?.trim() || notice.text, action: notice.dropped ? "retry" : null,
   });
   if (!notice.dropped) {
     noticeTimer = setTimeout(dismissLiveNotice, ENDED_NOTICE_MS);
@@ -393,13 +636,17 @@ function finish(notice: { text: string; dropped: boolean }, detail?: string) {
 }
 
 async function dropped(text: string) {
-  const { callId } = state;
+  const { callId, provider } = state;
   finish({ text, dropped: true });
-  if (callId) await endOnServer(callId);
+  if (provider !== "gemini" && callId) await endOnServer(callId);
 }
 
 async function endOnServer(callId: string): Promise<void> {
   await deps.request("/api/live/call/end", { method: "POST", body: JSON.stringify({ callId }), timeoutMs: 8_000 }).catch(() => undefined);
+}
+
+async function endGeminiOnServer(callId: string): Promise<void> {
+  await deps.request("/api/live/gemini/end", { method: "POST", body: JSON.stringify({ callId }), timeoutMs: 8_000 }).catch(() => undefined);
 }
 
 function onChannelMessage(raw: unknown) {
@@ -467,11 +714,23 @@ function stopCapturing() {
 }
 
 function release() {
-  for (const timer of [heardTimer, closeTimer, noticeTimer, connectTimer]) if (timer) clearTimeout(timer);
+  for (const timer of [heardTimer, closeTimer, noticeTimer, connectTimer, geminiSessionTimer]) if (timer) clearTimeout(timer);
   heardTimer = closeTimer = noticeTimer = connectTimer = null;
+  geminiSessionTimer = null;
   stopGestureWait?.();
   stopGestureWait = null;
   stopCapturing();
+  try { geminiProcessor?.disconnect(); } catch {}
+  geminiProcessor = null;
+  interruptGeminiAudio();
+  try { geminiAudioContext?.close(); } catch {}
+  geminiAudioContext = null;
+  try { geminiSocket?.close(); } catch {}
+  geminiSocket = null;
+  const lease = geminiLeaseCallId;
+  geminiLeaseCallId = null;
+  if (lease) void endGeminiOnServer(lease);
+  geminiReady = false;
   try { channel?.close(); } catch {}
   channel = null;
   try { peer?.close(); } catch {}

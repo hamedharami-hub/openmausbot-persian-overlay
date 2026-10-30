@@ -86,6 +86,44 @@ describe("create_bot", () => {
   });
 });
 
+describe("company project task tools", () => {
+  it("records a proposal with a stable idempotency key and never assigns work", async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const result = await callTool("propose_project_task", { title: "  Check sources  ", request_id: " source-check-1 " }, context({
+      client: {
+        api: async () => ({}),
+        apiResponse: async (path, init) => { calls.push({ path, body: JSON.parse(String(init?.body)) }); return { ok: true, status: 201, body: { projectId: "p1", task: { id: "t1", status: "proposed" } } }; },
+      },
+    }));
+    expect(calls).toEqual([{ path: "/api/internal/company/proposals", body: { title: "Check sources", requestId: "source-check-1" } }]);
+    expect(result.text).toContain("pending");
+    expect(result.text).toContain("does not execute");
+    expect(result.text).toContain("does not execute");
+  });
+
+  it("uses current expected revision for chief decisions and surfaces stale-write errors", async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const client = {
+      api: async () => ({}),
+      apiResponse: async (path: string, init?: RequestInit) => {
+        calls.push({ path, body: JSON.parse(String(init?.body)) });
+        return { ok: false, status: 409, body: { error: "Project data changed. Reload before saving." } };
+      },
+    };
+    const result = await callTool("decide_project_task", { project_id: "p1", task_id: "t1", expected_revision: 8, accept: false }, context({ client }));
+    expect(calls).toEqual([{ path: "/api/internal/company/projects/p1/tasks/t1/decision", body: { expectedRevision: 8, accept: false } }]);
+    expect(result).toEqual({ text: "Project data changed. Reload before saving.", isError: true });
+  });
+
+  it("rejects malformed proposals and decisions before calling the server", async () => {
+    const calls: string[] = [];
+    const ctx = context({ client: { api: async () => ({}), apiResponse: async (path) => { calls.push(path); return { ok: true, status: 200, body: {} }; } } });
+    expect((await callTool("propose_project_task", { title: "task" }, ctx)).isError).toBe(true);
+    expect((await callTool("decide_project_task", { project_id: "p", task_id: "t", expected_revision: "1", accept: true }, ctx)).isError).toBe(true);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("add_mcp_server", () => {
   it("posts the arguments and tells the model the server was saved off", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];

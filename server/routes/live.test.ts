@@ -34,6 +34,10 @@ async function serve(deps: LiveRouteDeps): Promise<string> {
 
 async function request(deps: LiveRouteDeps, method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown }> {
   const base = await serve(deps);
+  return requestAt(base, method, path, body, headers);
+}
+
+async function requestAt(base: string, method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; body: unknown }> {
   const response = await fetch(`${base}${path}`, {
     method,
     headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
@@ -56,10 +60,10 @@ function deps(overrides: Partial<LiveRouteDeps> = {}): LiveRouteDeps & { saved: 
       deviceRevoked: vi.fn((device: string) => (device === "phone-1" ? { ...call, client: "ios" as const, status: "ending" as const } : null)),
     },
     resolveTarget: (botId, threadId) => (botId === "bot1" && (threadId ?? "t1") === "t1" ? { botId, botName: "Ada", threadId: threadId ?? "t1" } : null),
-    settings: () => ({ configured: true, voice: "marin", readTypedReplies: true, idleMinutes: 5 }),
+    settings: () => ({ configured: true, provider: "openai", geminiConfigured: false, voice: "marin", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 }),
     saveSettings: vi.fn(async (patch: SettingsPatch): Promise<LiveSettings> => {
       saved.push(patch);
-      return { configured: true, voice: "marin", readTypedReplies: true, idleMinutes: 5, ...patch };
+      return { configured: true, provider: "openai", geminiConfigured: false, voice: "marin", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5, ...patch };
     }),
     ...overrides,
   };
@@ -146,7 +150,48 @@ describe("live routes", () => {
   });
   it("never answers with the key", async () => {
     const res = await request(deps(), "PATCH", "/api/live/settings", { voice: "cedar" });
-    expect(res).toEqual({ status: 200, body: { live: { configured: true, voice: "cedar", readTypedReplies: true, idleMinutes: 5 } } });
+    expect(res).toEqual({ status: 200, body: { live: { configured: true, provider: "openai", geminiConfigured: false, voice: "cedar", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 } } });
+  });
+
+  it("creates one Gemini Live lease, binds delegated work to it, and releases it", async () => {
+    const savedSettings: LiveSettings = { configured: true, provider: "gemini", geminiConfigured: true, keySource: "gemini", voice: "", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 };
+    const d = deps({
+      calls: { ...deps().calls, current: () => null },
+      settings: () => savedSettings,
+      geminiToken: vi.fn<NonNullable<LiveRouteDeps["geminiToken"]>>(async () => ({ token: "ephemeral-test-token", setup: { model: "models/gemini-3.8-live" }, initialTurns: [] })),
+      delegate: vi.fn(async () => ({ accepted: true, queued: true })),
+    });
+    const base = await serve(d);
+    const token = await requestAt(base, "POST", "/api/live/gemini/token", { botId: "bot1", threadId: "t1" });
+    expect(token).toMatchObject({ status: 200, body: { token: "ephemeral-test-token", callId: expect.stringMatching(/^gemini-/), idleMinutes: 5 } });
+    const callId = (token.body as { callId: string }).callId;
+    expect(JSON.stringify(token.body)).not.toContain("google-secret");
+    expect(await requestAt(base, "POST", "/api/live/gemini/token", { botId: "bot1", threadId: "t1" })).toMatchObject({ status: 409 });
+    expect(await requestAt(base, "POST", "/api/live/gemini/delegate", { callId, botId: "bot1", threadId: "t1", text: "Check the weather." })).toEqual({ status: 200, body: { accepted: true, queued: true } });
+    expect(d.delegate).toHaveBeenCalledWith(expect.objectContaining({ botId: "bot1", threadId: "t1", text: "Check the weather." }));
+    expect(await requestAt(base, "POST", "/api/live/gemini/end", { callId })).toEqual({ status: 200, body: { ended: true } });
+    expect(await requestAt(base, "POST", "/api/live/gemini/delegate", { callId, botId: "bot1", threadId: "t1", text: "This must not run." })).toMatchObject({ status: 409 });
+  });
+
+  it("reserves Gemini before the token provider finishes, and refuses mismatched or malformed handoffs", async () => {
+    type GeminiTokenResult = Awaited<ReturnType<NonNullable<LiveRouteDeps["geminiToken"]>>>;
+    let resolveToken!: (session: GeminiTokenResult) => void;
+    const d = deps({
+      calls: { ...deps().calls, current: () => null },
+      settings: () => ({ ...deps().settings(), provider: "gemini", geminiConfigured: true }),
+      geminiToken: vi.fn<NonNullable<LiveRouteDeps["geminiToken"]>>(() => new Promise((resolve) => { resolveToken = resolve; })),
+      delegate: vi.fn(async () => ({ accepted: true })),
+    });
+    const base = await serve(d);
+    const first = requestAt(base, "POST", "/api/live/gemini/token", { botId: "bot1", threadId: "t1" });
+    await vi.waitFor(() => expect(d.geminiToken).toHaveBeenCalledOnce());
+    expect(await requestAt(base, "POST", "/api/live/gemini/token", { botId: "bot1", threadId: "t1" })).toMatchObject({ status: 409 });
+    resolveToken({ token: "ephemeral", setup: {}, initialTurns: [] });
+    const token = await first;
+    const callId = (token.body as { callId: string }).callId;
+    expect(await requestAt(base, "POST", "/api/live/gemini/delegate", { callId, botId: "bot1", threadId: "wrong", text: "No." })).toMatchObject({ status: 409 });
+    expect(await requestAt(base, "POST", "/api/live/gemini/delegate", { callId: "gemini-unrelated", botId: "bot1", threadId: "t1", text: "No." })).toMatchObject({ status: 409 });
+    expect(d.delegate).not.toHaveBeenCalled();
   });
   it("passes other paths and methods", async () => {
     expect(await request(deps(), "GET", "/api/live/summary")).toEqual({ status: 404, body: { from: "inline routes" } });
@@ -161,6 +206,9 @@ describe("live routes", () => {
     expect(requiredScope("GET", "/api/live/call")).toBe("admin");
     expect(requiredScope("PATCH", "/api/live/settings")).toBe("admin");
     expect(requiredScope("POST", "/api/live/device-revoked")).toBe("admin");
+    expect(requiredScope("POST", "/api/live/gemini/token")).toBe("admin");
+    expect(requiredScope("POST", "/api/live/gemini/end")).toBe("admin");
+    expect(requiredScope("POST", "/api/live/gemini/delegate")).toBe("admin");
   });
 
   describe("a call from a paired phone", () => {

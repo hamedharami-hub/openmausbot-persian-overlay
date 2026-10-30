@@ -33,6 +33,21 @@ describe("Store", () => {
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
+  it("retains room member models across restarts and prunes only members removed from that room", () => {
+    const store = new Store(selection);
+    const bot = store.createBot({ name: "Shared model member" });
+    const peer = store.createBot({ name: "Other member" });
+    const first = store.createGroup("First model room", [bot.id, peer.id], false);
+    const second = store.createGroup("Second model room", [bot.id], false);
+    const own = { instanceId: "claude", model: "claude-opus-5-5" };
+    store.patchGroup(first.id, { memberModels: { [bot.id]: own } });
+    expect(new Store(selection).group(first.id)?.memberModels).toEqual({ [bot.id]: own });
+    expect(new Store(selection).group(second.id)?.memberModels).toBeUndefined();
+    expect(new Store(selection).bot(bot.id)?.modelSelection).toEqual(bot.modelSelection);
+    store.patchGroup(first.id, { memberIds: [peer.id] });
+    expect(new Store(selection).group(first.id)?.memberModels).toBeUndefined();
+  });
+
   it("retains tool selection across restarts and distinguishes clearing from no tools", () => {
     const store = new Store(selection);
     const bot = store.createBot({ name: "Scoped drafter" });

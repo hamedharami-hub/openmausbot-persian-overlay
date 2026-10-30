@@ -1464,9 +1464,9 @@ describe("credential env preference", () => {
     expect(cfg.imageGen).toEqual({ key: "env-image" });
   });
 
-  it("uses a preset voice only when the person has not chosen one or another provider", () => {
+  it("applies the preset ElevenLabs voice only when that provider is selected or included", () => {
     process.env.OMB_TTS_DEFAULT_VOICE = " preset-voice ";
-    expect(loadConfig().tts?.voice).toBe("preset-voice");
+    expect(loadConfig().tts?.voice).toBeUndefined();
     writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ tts: { voice: "chosen" } }));
     expect(loadConfig().tts?.voice).toBe("chosen");
     writeFileSync(join(DATA_DIR, "config.json"), JSON.stringify({ tts: { provider: "system" } }));

@@ -30,6 +30,12 @@ export interface BotMemoryRouteDeps {
   /** The caller's About me: the server's profile's, or on a Team Cloud the signed-in person's own. */
   aboutMe(auth: RequestAuth): string;
   saveAboutMe(text: string, auth: RequestAuth): void;
+  /** Installation-wide About me and learned facts are private to the owner on a shared install. */
+  canManageProfileMemory?(auth: RequestAuth): boolean;
+  /** Shared bot memory is a public workspace resource; only its owner may change it on a shared install. */
+  canWriteMemory?(auth: RequestAuth, botId: string): boolean;
+  /** Account-local learned facts; legacy data is exposed only when explicitly marked. */
+  profileMemory?(auth: RequestAuth): { scopeKey?: string; includeLegacy: boolean; aboutMe(): string; saveAboutMe(text: string): void } | null;
   /** Cloud home only. A review may come only from one of the owner's own devices (`owner`). */
   lendingReview?: {
     needed(botId: string): { token: string; changed: string[] } | null;
@@ -58,6 +64,11 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
     let m: RegExpMatchArray | null = null;
     const write = <T>(botId: string, change: () => T): T => deps.ownersWrite ? deps.ownersWrite(auth, botId, change) : change();
+    const refuseMemoryWrite = (botId: string): boolean => {
+      if (!deps.canWriteMemory || deps.canWriteMemory(auth, botId)) return false;
+      json(res, 403, { error: "Only the workspace owner can change shared bot memory. Save account-specific facts in your About me profile." });
+      return true;
+    };
     m = path.match(/^\/api\/bots\/([\w-]+)\/memory$/);
     if (m && method === "GET") {
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });
@@ -72,6 +83,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       }
     }
     if (m && method === "PUT") {
+      if (refuseMemoryWrite(m[1])) return;
       // The old whole-file write, kept one release: no hash check, so it can overwrite a note the bot just wrote.
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });
       const parsed = z.object({ text: z.string() }).safeParse(await readBody(req));
@@ -111,6 +123,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       }
     }
     if (m && method === "PUT") {
+      if (refuseMemoryWrite(m[1])) return;
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });
       const parsed = z
         .object({ path: z.string().default(MEMORY_INDEX), text: z.string(), expectedHash: z.string().optional() })
@@ -129,6 +142,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       }
     }
     if (m && method === "DELETE") {
+      if (refuseMemoryWrite(m[1])) return;
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });
       const file = url.searchParams.get("path") ?? "";
       try {
@@ -150,6 +164,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
     }
     m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/journal\/([\w-]+)\/revert$/);
     if (m && method === "POST") {
+      if (refuseMemoryWrite(m[1])) return;
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });
       await flushMemoryJournal(m[1]);
       const botId = m[1], changeId = m[2];
@@ -158,13 +173,35 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       return json(res, 200, { ok: true, ...result.doc, entry: result.entry ? journalEntryForClient(m[1], result.entry) : null, overview: memoryOverview(m[1]) });
     }
     if (method === "GET" && path === "/api/profile/learned") {
-      return json(res, 200, { learned: listLearnedFacts() });
+      const memory = deps.profileMemory?.(auth);
+      if (deps.profileMemory && !memory) return json(res, 403, { error: "Sign in to view your learned facts." });
+      if (!deps.profileMemory && deps.canManageProfileMemory && !deps.canManageProfileMemory(auth)) return json(res, 403, { error: "These learned facts belong to the workspace owner." });
+      const scopeKey = memory?.scopeKey;
+      const learned = [
+        ...(memory?.includeLegacy && scopeKey ? listLearnedFacts() : []),
+        ...listLearnedFacts(scopeKey),
+      ];
+      return json(res, 200, { learned });
     }
     m = path.match(/^\/api\/profile\/learned\/([\w-]+)\/remove$/);
     if (m && method === "POST") {
-      const removed = removeLearned(m[1], deps.aboutMe(auth), (text) => deps.saveAboutMe(text, auth));
+      const memory = deps.profileMemory?.(auth);
+      if (deps.profileMemory && !memory) return json(res, 403, { error: "Sign in to edit your learned facts." });
+      if (!deps.profileMemory && deps.canManageProfileMemory && !deps.canManageProfileMemory(auth)) {
+        return json(res, 403, { error: "These learned facts belong to the workspace owner." });
+      }
+      const scopeKey = memory?.scopeKey;
+      const inLegacy = Boolean(memory?.includeLegacy && scopeKey && listLearnedFacts().some((fact) => fact.id === m![1]));
+      const selectedScope = inLegacy ? undefined : scopeKey;
+      const saveAboutMe = memory?.saveAboutMe ?? ((text: string) => deps.saveAboutMe(text, auth));
+      const aboutMe = memory?.aboutMe() ?? deps.aboutMe(auth);
+      const removed = removeLearned(m[1], aboutMe, saveAboutMe, selectedScope);
       if (!removed) return json(res, 404, { error: "That fact was already removed." });
-      return json(res, 200, { ok: true, aboutMe: deps.aboutMe(auth), learned: listLearnedFacts() });
+      const remaining = [
+        ...(memory?.includeLegacy && scopeKey ? listLearnedFacts() : []),
+        ...listLearnedFacts(scopeKey),
+      ];
+      return json(res, 200, { ok: true, aboutMe: memory?.aboutMe() ?? deps.aboutMe(auth), learned: remaining });
     }
     m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/upkeep$/);
     if (m && method === "GET") {
@@ -174,6 +211,7 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
     }
     m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/tidy$/);
     if (m && method === "POST") {
+      if (refuseMemoryWrite(m[1])) return;
       const bot = deps.bot(m[1]);
       if (!bot) return json(res, 404, { error: "no such bot" });
       if (!upkeepEnabled(bot)) return json(res, 409, { error: "Switch on Memory upkeep for this bot first." });

@@ -33,14 +33,14 @@ export function TableDialog({ title, onClose, children, returnFocus }: { title: 
     return () => { dialog.close(); if (returnFocus?.isConnected) returnFocus.focus(); };
   }, [returnFocus]);
   return createPortal(
-    <dialog ref={ref} aria-labelledby={id} onCancel={onClose} onClose={onClose}
+    <dialog ref={ref} data-table-dialog aria-labelledby={id} onCancel={onClose} onClose={onClose}
       onKeyDown={(event) => { if (event.key === "Escape") event.stopPropagation(); }}
-      className="m-auto flex max-h-[94dvh] w-[min(96vw,1400px)] max-w-none flex-col overflow-hidden rounded-2xl border border-hairline bg-panel p-0 text-ink shadow-2xl backdrop:bg-black/55">
+      className="m-0 flex h-dvh max-h-dvh w-dvw max-w-none flex-col overflow-hidden border-0 bg-panel p-0 text-ink shadow-2xl backdrop:bg-black/55">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline/40 px-4 py-3">
         <h2 id={id} className="min-w-0 truncate text-sm font-medium">{title}</h2>
         <button type="button" autoFocus onClick={onClose} className="table-action" aria-label={t("table.close")}><X size={16} /></button>
       </header>
-      <div className="min-h-0 overflow-auto p-3 sm:p-5">{children}</div>
+      <div className="flex min-h-0 flex-1 overflow-hidden p-2 sm:p-3">{children}</div>
     </dialog>, document.body,
   );
 }
@@ -117,7 +117,7 @@ export function RichTable({ columns, rows, name = t("table.title"), expanded = f
         {!large && <button type="button" className="table-action" aria-label={t("table.expand")} title={t("table.expand")} onClick={(event) => { trigger.current = event.currentTarget; setOpen(true); }}><Maximize2 size={14} /></button>}
     </>;
     return (
-    <div className={cn("rich-table w-fit min-w-[min(100%,var(--chat-prose-max))] max-w-full overflow-hidden rounded-xl border border-hairline/50 text-ink", simple ? "bg-composer" : "bg-panel")} dir="ltr">
+    <div className={cn("rich-table min-w-0 max-w-full overflow-hidden rounded-xl border border-hairline/50 text-ink", large ? "flex w-full min-h-0 flex-1 flex-col" : "w-full", simple ? "bg-composer" : "bg-panel")} dir="ltr">
       {!small && <div className="flex flex-wrap items-center gap-1 border-b border-hairline/40 px-2 py-1.5">
         {search("flex min-w-24 flex-1 items-center gap-2 px-1 text-ink-secondary")}
         {actions}
@@ -184,8 +184,8 @@ function TableViewport({ columns, rows, order, name, wrap, large, sort, onSort, 
   const header = (column: TableColumn, index: number) => column.content ?? (column.text || t("table.column", { number: index + 1 }));
   const arrow = (index: number, className?: string) => sort?.column === index && sort.descending ? <ArrowDown size={12} className={className} /> : <ArrowUp size={12} className={cn(className, sort?.column !== index && !card && "opacity-35")} />;
   return <div ref={scroll} tabIndex={0} role="region" aria-label={name}
-    className={cn("overflow-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60", card && !fit && "[mask-image:linear-gradient(90deg,#000_calc(100%-40px),transparent)]")}
-    style={{ maxHeight: large ? "65dvh" : virtual || !wrap ? 400 : undefined }} data-fit={fit || undefined}>
+    className={cn("overflow-auto overscroll-x-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60", large && "min-h-0 flex-1", card && !fit && "[mask-image:linear-gradient(90deg,#000_calc(100%-40px),transparent)]")}
+    style={{ maxHeight: large ? undefined : virtual || !wrap ? 400 : undefined }} data-table-viewport data-fit={fit || undefined}>
     <table dir={direction} aria-label={name} aria-rowcount={order.length + 1} className={cn("w-full border-separate border-spacing-0 text-[14px]", fit ? "table-auto" : "table-fixed", card && "leading-5")} style={fit ? undefined : { minWidth: widths.reduce((a, b) => a + b, 0) }}>
       {!fit && <colgroup>{widths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup>}
       <thead ref={heading} hidden={headless} className={cn("sticky top-0 z-10", look === "panel" ? "bg-raised" : "bg-composer")}><tr aria-rowindex={1}>

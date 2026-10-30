@@ -5,12 +5,12 @@ import { LIVE_IDLE_MINUTES_DEFAULT, liveCallKey, liveSettingsFor } from "./live-
 describe("live settings", () => {
   it("defaults to a 5 minute idle hang-up and reading typed replies, with no key", () => {
     expect(LIVE_IDLE_MINUTES_DEFAULT).toBe(5);
-    expect(liveSettingsFor({} as AppConfig)).toEqual({ configured: false, voice: "", readTypedReplies: true, idleMinutes: 5 });
+    expect(liveSettingsFor({} as AppConfig)).toEqual({ configured: false, provider: "openai", geminiConfigured: false, voice: "", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 });
   });
 
   it("reports saved values and where the key comes from, never the key", () => {
     const settings = liveSettingsFor({ live: { key: "sk-test", voice: "sol", readTypedReplies: false, idleMinutes: 12 } } as AppConfig);
-    expect(settings).toEqual({ configured: true, keySource: "live", voice: "sol", readTypedReplies: false, idleMinutes: 12 });
+    expect(settings).toEqual({ configured: true, provider: "openai", geminiConfigured: false, keySource: "live", voice: "sol", geminiVoice: "Kore", readTypedReplies: false, idleMinutes: 12 });
     expect(JSON.stringify(settings)).not.toContain("sk-test");
   });
 });
@@ -34,6 +34,12 @@ describe("the key a Live call uses", () => {
     const others = { imageGen: { key: "sk-image" }, openaiCompat: { key: "sk-compat" }, openrouter: { key: "sk-or" }, xai: { key: "xai-key" } } as AppConfig;
     expect(liveCallKey(others)).toBeNull();
     expect(liveCallKey({ ...others, openai: { key: " " } })).toBeNull();
-    expect(liveSettingsFor(others)).toEqual({ configured: false, voice: "", readTypedReplies: true, idleMinutes: 5 });
+    expect(liveSettingsFor(others)).toEqual({ configured: false, provider: "openai", geminiConfigured: false, voice: "", geminiVoice: "Kore", readTypedReplies: true, idleMinutes: 5 });
+  });
+
+  it("reports Gemini as configured without exposing the API key", () => {
+    const settings = liveSettingsFor({ live: { provider: "gemini", geminiVoice: "Aoede" }, gemini: { apiKey: "google-secret" } } as AppConfig);
+    expect(settings).toEqual({ configured: true, provider: "gemini", geminiConfigured: true, keySource: "gemini", voice: "", geminiVoice: "Aoede", readTypedReplies: true, idleMinutes: 5 });
+    expect(JSON.stringify(settings)).not.toContain("google-secret");
   });
 });

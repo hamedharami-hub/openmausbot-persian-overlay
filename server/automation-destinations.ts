@@ -8,6 +8,7 @@ export interface AutomationDestinationDeps {
   store: Pick<Store, "bot" | "createTask" | "messagesFor" | "taskByThread">;
   mainThread(botId: string): string | undefined;
   runs(): readonly Pick<RoutineRun, "webhookId" | "botId" | "resultsThreadId">[];
+  privateOwner?(threadId: string): string | undefined;
   /** Only on a Cloud home. */
   cloud: {
     owner: string;
@@ -37,6 +38,8 @@ export function createAutomationDestinations(deps: AutomationDestinationDeps) {
       const main = bot && !bot.hidden ? deps.mainThread(bot.id) : undefined;
       const mainAllowed = main && (!cloud || opener === cloud.owner);
       if (chosen && !chosen.routineRunId && !(mainAllowed && legacyResultsThread(routine.name, chosen))) return { threadId: chosen.threadId };
+      // A routine created in a private chat reports there by default, never in the bot's shared main chat.
+      if (routine.sourceThreadId && deps.privateOwner?.(routine.sourceThreadId)) return { threadId: routine.sourceThreadId };
       if (mainAllowed) return { threadId: main, main: true };
       const threadId = cloud ? chatOfItsOwn(routine.botId, routine.name, opener!) : undefined;
       return threadId ? { threadId } : undefined;

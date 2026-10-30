@@ -93,6 +93,7 @@ export interface ConfigRouteDeps {
   /** A Team Cloud only: Settings → Profile saves the signed-in person's own profile, never the server's. False: nobody
    * signed in to save it for. */
   ownProfile?(auth: RequestAuth, profile: { name?: string; avatarUrl?: string; aboutMe?: string }): boolean;
+  personalProfile?(auth: RequestAuth): import("../config.ts").AppConfig["profile"] | null;
   resyncOpenCodeProviderKeys(): void;
   revokeEngineCapabilities(engines: ReadonlySet<string>): void;
   reloadProviders(before: Record<string, unknown>): Promise<void>;
@@ -521,6 +522,7 @@ export function createConfigRoutes(deps: ConfigRouteDeps): RouteHandler {
           if (persisted.xai?.key !== undefined) persisted.xai.key = "";
           if (persisted.composio?.apiKey !== undefined) persisted.composio.apiKey = "";
           if (persisted.box?.token !== undefined) persisted.box.token = "";
+          if (persisted.gemini?.apiKey !== undefined) persisted.gemini.apiKey = "";
           if (persisted.opencodeGo?.apiKey !== undefined) persisted.opencodeGo.apiKey = "";
           if (persisted.tts?.key !== undefined) persisted.tts.key = "";
           if (persisted.tts?.fishKey !== undefined) persisted.tts.fishKey = "";

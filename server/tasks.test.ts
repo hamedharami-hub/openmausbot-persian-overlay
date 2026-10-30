@@ -74,6 +74,29 @@ describe("tasks", () => {
     expect(store.activeTask(bot.id)!.resumeCursors.claude).toBe("session-two");
   });
 
+  it("lets a thread inherit, override, disable, and resume the bot fallback chain", async () => {
+    const { store } = await freshStore();
+    const bot = store.createBot();
+    const main = bot.threadId;
+    const second = store.createTask(bot.id)!.threadId;
+    const botChain = [
+      { instanceId: "deepseek", model: "deepseek-chat" },
+      { instanceId: "gemini", model: "gemini-3.8" },
+    ];
+    store.patchBot(bot.id, { fallback: botChain });
+
+    expect(store.projectBotForTask(bot.id, second)?.fallback).toEqual(botChain);
+    const threadChain = [{ instanceId: "openai", model: "gpt-6-luna" }];
+    store.patchTask(bot.id, second, { fallback: threadChain });
+    expect(store.projectBotForTask(bot.id, second)?.fallback).toEqual(threadChain);
+    expect(store.projectBotForTask(bot.id, main)?.fallback).toEqual(botChain);
+
+    store.patchTask(bot.id, second, { fallback: [] });
+    expect(store.projectBotForTask(bot.id, second)?.fallback).toEqual([]);
+    store.patchTask(bot.id, second, { fallback: undefined });
+    expect(store.projectBotForTask(bot.id, second)?.fallback).toEqual(botChain);
+  });
+
   it("names a task after the first thing you asked it", async () => {
     const { store, UNTITLED_THREAD, titleFromMessage } = await freshStore();
     const bot = store.createBot();

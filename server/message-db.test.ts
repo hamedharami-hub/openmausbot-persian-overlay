@@ -18,6 +18,7 @@ import { closeMessageDb,
   latestSaidByBot,
   markNotificationLogRead,
   markThreadNotificationLogRead,
+  markNotificationLogReadForThreads,
   readMessageText,
   recentMessages,
   recentNotificationLog,
@@ -563,6 +564,18 @@ describe("notification_log", () => {
     expect(rows.filter((r) => r.read).map((r) => r.id).sort()).toEqual(["n1", "n2"]);
     expect(rows.find((r) => r.id === "n3")?.read).toBe(false);
     expect(markThreadNotificationLogRead("thread-1")).toEqual([]);
+  });
+
+  it("marks only notifications from threads a member can see", () => {
+    insertNotificationLog(entry("mine", 1000, { threadId: "thread-a" }));
+    insertNotificationLog(entry("shared", 2000, { threadId: "room-1" }));
+    insertNotificationLog(entry("other", 3000, { threadId: "thread-b" }));
+
+    markNotificationLogReadForThreads(["thread-a", "room-1", "thread-a"]);
+
+    expect(recentNotificationLog().map(({ id, read }) => [id, read])).toEqual([
+      ["other", false], ["shared", true], ["mine", true],
+    ]);
   });
 
   it("keeps only the newest 500 rows, FIFO", () => {

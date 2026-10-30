@@ -182,6 +182,26 @@ describe("About me, learned on its own", () => {
     expect(planLearned(from, ["api_key: sk-abcdefghijklmnopqrstuvwxyz123456"], "", TODAY)[0]?.text).not.toContain("sk-abcdefghijklmnop");
   });
 
+  it("stores learned About me facts and removal history separately per account", () => {
+    const first = `p_${"a".repeat(22)}`;
+    const second = `p_${"b".repeat(22)}`;
+    const from = { botId: "b1", botName: "Scout" };
+    const firstFacts = planLearned(from, ["Prefers quiet cafes"], "", TODAY, 101, first);
+    const secondFacts = planLearned(from, ["Enjoys tea"], "", TODAY, 102, second);
+    expect(firstFacts).toHaveLength(1);
+    expect(secondFacts).toHaveLength(1);
+    commitLearned(firstFacts, first);
+    commitLearned(secondFacts, second);
+    expect(listLearnedFacts(first)).toEqual(firstFacts);
+    expect(listLearnedFacts(second)).toEqual(secondFacts);
+    const removed = removeLearned(firstFacts[0]!.id, firstFacts[0]!.line, undefined, first);
+    expect(removed?.aboutMe).toBe("");
+    expect(listLearnedFacts(first)).toEqual([]);
+    expect(listLearnedFacts(second)).toEqual(secondFacts);
+    expect(planLearned(from, ["Prefers quiet cafes"], "", TODAY, 103, first)).toEqual([]);
+    expect(planLearned(from, ["Prefers quiet cafes"], "", TODAY, 104, second)).toHaveLength(1);
+  });
+
   it("formats and bounds the About me line", () => {
     expect(aboutMeLine({ text: "Is vegetarian", botName: "Scout · Bot" }, TODAY)).toBe("- 2026-09-25 · learned by Scout - Bot · Is vegetarian");
     expect(appendAboutMe("I run a studio.\n\n", ["- x"])).toBe("I run a studio.\n- x");

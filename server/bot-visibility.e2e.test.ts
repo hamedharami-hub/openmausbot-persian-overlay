@@ -274,7 +274,8 @@ posixOnly("per-bot visibility on a shared workspace", () => {
     expect(await status("GET", `/api/attachments/${ids.avatar}`, ADA)).toBe(200);
     expect(await status("GET", `/api/threads/${ids.hrThread}/messages`, ADA)).toBe(200);
     expect(await status("GET", `/api/threads/${ids.hrThread}/messages`, BOSS)).toBe(200);
-    expect(await status("GET", `/api/attachments/${ids.fresh}`, BOB)).toBe(200);
+    // The BOSS's unreferenced upload has not been explicitly shared with BOB.
+    expect(await status("GET", `/api/attachments/${ids.fresh}`, BOB)).toBe(404);
     expect(await status("GET", `/api/threads/${ids.pubThread}/messages`, BOB)).toBe(200);
     expect(await status("POST", `/api/groups/${ids.roomPub}/read`, BOB)).toBe(200);
   });

@@ -1160,7 +1160,7 @@ describe("a fence's wrap directive", () => {
 describe("bidi: message content carries its own direction", () => {
   const ARABIC = "مرحبا بالعالم";
 
-  it("reads direction from the first strong letter, ignoring weak characters", () => {
+  it("reads direction from prose while ignoring weak characters", () => {
     expect(textDirection("مرحبا")).toBe("rtl");
     expect(textDirection("hello")).toBe("ltr");
     expect(textDirection("")).toBe("ltr");
@@ -1178,6 +1178,27 @@ describe("bidi: message content carries its own direction", () => {
     expect(textDirection("\u{11000}\u{11005}")).toBe("ltr");
     expect(textDirection("\u0915")).toBe("ltr");
     expect(textDirection("\u4E2D")).toBe("ltr");
+  });
+
+  it.each([
+    "Gemini برای این متنِ آزمایشی بررسی شده است.",
+    "1. Groq — سرعت بسیار بالا برای پاسخ‌های روزمره دارد.",
+    "OpenRouter — مدل‌های مختلف را برای گفتگو انتخاب کنید.",
+    "DeepSeek (via OpenCode) — این مدل برای خواندن متن فارسی مناسب است.",
+  ])("keeps Persian prose RTL after an English name: %s", (value) => {
+    expect(textDirection(value)).toBe("rtl");
+  });
+
+  it("keeps an English sentence with one quoted Persian word LTR", () => {
+    expect(textDirection('The word «سلام» is a Persian greeting.')).toBe("ltr");
+  });
+
+  it("gives mixed-language list items independent directions", () => {
+    const html = renderToStaticMarkup(createElement(ChatMarkdown, {
+      text: "1. OpenCode — یک جملهٔ فارسی که با نام انگلیسی شروع می‌شود.\n2. This is an English list item.",
+    }));
+    expect(html).toMatch(/<li dir="rtl">OpenCode/);
+    expect(html).toMatch(/<li dir="ltr">This is an English/);
   });
 
   it("gives every block its own direction instead of the UI's", () => {

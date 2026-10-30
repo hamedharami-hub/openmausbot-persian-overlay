@@ -106,6 +106,21 @@ describe("scopes", () => {
     ] as const) expect(requiredScope(method, path), `${method} ${path}`).toBe("admin");
   });
 
+  it("lets chat clients manage visible conversation context without exposing bot memory administration", () => {
+    for (const method of ["GET", "PATCH", "POST"]) {
+      expect(requiredScope(method, "/api/bots/b1/context")).toBe("client");
+      expect(requiredScope(method, "/api/groups/g1/context")).toBe("client");
+    }
+    expect(requiredScope("GET", "/api/threads/t1/important")).toBe("client");
+    expect(requiredScope("POST", "/api/threads/t1/messages/m1/important")).toBe("client");
+    expect(requiredScope("GET", "/api/me/profile")).toBe("client");
+    expect(requiredScope("PUT", "/api/me/profile")).toBe("client");
+    expect(requiredScope("GET", "/api/profile/learned")).toBe("client");
+    expect(requiredScope("POST", "/api/profile/learned/fact-1/remove")).toBe("client");
+    expect(requiredScope("DELETE", "/api/me/profile")).toBe("admin");
+    expect(requiredScope("DELETE", "/api/threads/t1/important")).toBe("admin");
+    expect(requiredScope("PUT", "/api/bots/b1/memory")).toBe("admin");
+  });
   it("keeps full backups, credentials and replacement behind admin scope", () => {
     for (const path of ["status", "export", "upload", "preview", "restore", "client-state", "download/123"]) {
       for (const method of ["GET", "POST", "DELETE"]) expect(requiredScope(method, `/api/workspace-backup/${path}`)).toBe("admin");
@@ -119,7 +134,7 @@ describe("scopes", () => {
       ["PATCH", "/api/bots/x"], ["PATCH", "/api/bots/x/profile"], ["POST", "/api/attachments"], ["PUT", "/api/bots/order"],
       ["GET", "/api/attachments/a.png"], ["POST", "/api/routines"], ["POST", "/api/routines/r/run"],
       ["POST", "/api/routine-runs/seen-all"],
-      ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
+      ["GET", "/api/instances"], ["GET", "/api/bots"], ["GET", "/api/threads/t/messages"], ["GET", "/api/search"], ["GET", "/api/events"],
       ["GET", "/api/config"], ["GET", "/api/webhooks"], ["POST", "/api/tts/speak"],
       ["GET", "/api/auth/session"], ["POST", "/api/auth/stream-ticket"], ["POST", "/api/auth/logout"],
       ["GET", "/api/bots/x/slack-management"],
@@ -130,7 +145,7 @@ describe("scopes", () => {
       ["POST", "/api/bots/x/queue/q/steer"], ["POST", "/api/groups/g/queue/q/steer"],
     ] as const) expect(requiredScope(method, path), `${method} ${path}`).toBe("client");
     for (const [method, path] of [
-      ["POST", "/api/cli-test"], ["GET", "/api/cli-candidates"], ["GET", "/api/instances"], ["PATCH", "/api/instances/claude"],
+      ["POST", "/api/cli-test"], ["GET", "/api/cli-candidates"], ["PATCH", "/api/instances/claude"],
       ["POST", "/api/bots/x/computer/exec"], ["POST", "/api/bots/x/computer/join"], ["POST", "/api/local-computer/run"],
       ["POST", "/api/bots/x/local-computer/join"], ["POST", "/api/bots/x/local-computer/screenshot"],
       ["GET", "/api/computers/boxes"], ["POST", "/api/computers/boxes/bx_23456789/delete"],
@@ -144,6 +159,7 @@ describe("scopes", () => {
       ["PUT", "/api/config"], ["POST", "/api/auth/pairing"], ["GET", "/api/auth/sessions"], ["DELETE", "/api/auth/sessions/abc"],
       ["POST", "/api/live/session"], ["POST", "/api/live/call/end"], ["GET", "/api/live/call"], ["PATCH", "/api/live/settings"],
       ["POST", "/api/live/device-revoked"],
+      ["POST", "/api/live/gemini/token"], ["POST", "/api/live/gemini/end"], ["POST", "/api/live/gemini/delegate"],
       ["POST", "/api/auth/pair"],
       ["GET", "/api/something-new"],
       ["POST", "/api/bots/x/sign-in-cards/m/provide"], ["POST", "/api/browser-engine/install"],

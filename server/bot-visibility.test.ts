@@ -35,12 +35,13 @@ const BEN_ADMIN: Viewer = { kind: "all", email: "ben@example.test" };
 
 const bots = [
   { id: "pub", threadId: "t-pub", section: "Ops", tasks: [{ threadId: "t-pub" }, { threadId: "t-pub-2" }] },
-  { id: "hr", threadId: "t-hr", section: "People", visibility: { people: ["ada@example.test"] }, avatarUrl: "/api/attachments/hr.png", tasks: [{ threadId: "t-hr" }] },
+  { id: "hr", threadId: "t-hr", section: "People", visibility: { people: ["ada@example.test"] }, avatarUrl: "/api/attachments/hr.png", tasks: [{ threadId: "t-hr" }, { threadId: "t-hr-2" }] },
   { id: "adm", threadId: "t-adm", section: "People", visibility: "admins" },
   { id: "corp", threadId: "t-corp", visibility: { people: ["@example.test"] } },
 ];
 const groups = [
   { id: "room-pub", threadId: "t-room-pub", memberIds: ["pub"], section: "Ops" },
+  { id: "room-hr", threadId: "t-room-hr", memberIds: ["hr"], section: "People" },
   { id: "room-mixed", threadId: "t-room-mixed", memberIds: ["pub", "hr"], tasks: [{ threadId: "t-room-mixed-2" }] },
   { id: "room-empty", threadId: "t-room-empty", memberIds: ["gone"] },
 ];
@@ -136,7 +137,7 @@ describe("VisibleSet", () => {
     expect(bob.everything).toBe(false);
     expect([bob.bot("pub"), bob.bot("hr"), bob.bot("adm"), bob.bot("corp"), bob.bot("unknown")]).toEqual([true, false, false, true, false]);
     expect([bob.group("room-pub"), bob.group("room-mixed"), bob.group("room-empty")]).toEqual([true, false, false]);
-    expect([bob.thread("t-pub-2"), bob.thread("t-hr"), bob.thread("t-room-mixed-2"), bob.thread("t-unknown")]).toEqual([true, false, false, false]);
+    expect([bob.thread("t-pub-2"), bob.thread("t-hr"), bob.thread("t-room-pub"), bob.thread("t-room-mixed-2"), bob.thread("t-unknown")]).toEqual([false, false, true, false, false]);
     expect(bob.sections(["Ops", "People", "Empty"])).toEqual(["Ops"]);
 
     const ada = new VisibleSet(bots, groups, ADA);
@@ -146,7 +147,7 @@ describe("VisibleSet", () => {
 
   it("refuses an attachment only when everything that uses it is hidden", () => {
     const bob = new VisibleSet(bots, groups, BOB);
-    const refs: Record<string, string[]> = { "in-hr.png": ["t-hr"], "shared.png": ["t-hr", "t-pub"], "fresh.png": [] };
+    const refs: Record<string, string[]> = { "in-hr.png": ["t-room-hr"], "shared.png": ["t-hr", "t-room-pub"], "fresh.png": [] };
     const lookup = (name: string) => refs[name] ?? [];
     expect(bob.attachment("hr.png", lookup)).toBe(false); // the restricted bot's avatar
     expect(bob.attachment("in-hr.png", lookup)).toBe(false);
@@ -226,12 +227,12 @@ describe("live frames for a member", () => {
   it("passes visible frames through untouched and narrows the lists", () => {
     const bob = new VisibleSet(bots, groups, BOB);
     const ctx = context(bob);
-    const message = { kind: "message", threadId: "t-pub-2", message: { id: "x" } };
+    const message = { kind: "message", threadId: "t-room-pub", message: { id: "x" } };
     expect(frameForMember(message, ctx, seen())).toBe(message);
     const hook = { kind: "webhook.attempt", attempt: { webhookId: "hook-pub" } };
     expect(frameForMember(hook, ctx, seen())).toBe(hook);
     expect(frameForMember({ kind: "sections", sections: ["Ops", "People"] }, ctx, seen())).toEqual({ kind: "sections", sections: ["Ops"] });
-    expect(frameForMember({ kind: "bot.queued", queues: { "t-pub": [1], "t-hr": [2] } }, ctx, seen())).toEqual({ kind: "bot.queued", queues: { "t-pub": [1] } });
+    expect(frameForMember({ kind: "bot.queued", queues: { "t-room-pub": [1], "t-hr": [2] } }, ctx, seen())).toEqual({ kind: "bot.queued", queues: { "t-room-pub": [1] } });
     expect(frameForMember({ kind: "bots.order", botIds: ["hr", "pub", "corp"] }, ctx, seen())).toEqual({ kind: "bots.order", botIds: ["pub", "corp"] });
     const config = { kind: "config", membership: {} };
     expect(frameForMember(config, ctx, seen())).toBe(config);
@@ -317,6 +318,36 @@ describe("live frames for a member", () => {
     expect(memberFramePayload(plain)).toBe(plain);
     const config = { kind: "config", vpsAlias: "not a bot" };
     expect(memberFramePayload(config)).toBe(config);
+  });
+
+  it("keeps explicitly private bot threads account-scoped even when all bots are otherwise visible", () => {
+    const ownerKey = `p_${"a".repeat(22)}`;
+    const otherKey = `p_${"b".repeat(22)}`;
+    const publicBots = bots.filter((bot) => bot.id === "pub");
+    const publicGroups = groups.filter((group) => group.id === "room-pub");
+    const owner = new VisibleSet(publicBots, publicGroups, { kind: "member", email: "ada@example.test", personKey: ownerKey }, undefined,
+      (threadId) => threadId === "t-pub-2" ? ownerKey : undefined);
+    const other = new VisibleSet(publicBots, publicGroups, { kind: "member", email: "bob@example.test", personKey: otherKey }, undefined,
+      (threadId) => threadId === "t-pub-2" ? ownerKey : undefined);
+    const admin = new VisibleSet(publicBots, publicGroups, SEES_EVERYTHING, undefined,
+      (threadId) => threadId === "t-pub-2" ? ownerKey : undefined);
+
+    expect(owner.everything).toBe(false);
+    expect(owner.thread("t-pub-2")).toBe(true);
+    expect(other.thread("t-pub-2")).toBe(false);
+    expect(admin.thread("t-pub-2")).toBe(true);
+    expect(other.thread("t-pub")).toBe(false); // legacy bot main chat is private-by-default for members
+    expect(other.thread("t-room-pub")).toBe(true); // group chat remains intentionally shared
+    expect(routineVisible({ botId: "pub", sourceThreadId: "t-pub-2" }, owner)).toBe(true);
+    expect(routineVisible({ botId: "pub", sourceThreadId: "t-pub-2" }, other)).toBe(false);
+    expect(routineVisible({ botId: "pub", resultsThreadId: "t-pub-2" }, other)).toBe(false);
+    expect(frameForMember({ kind: "routine.deleted", routineId: "private", botId: "pub", sourceThreadId: "t-pub-2" }, context(other), seen())).toBeUndefined();
+    expect(memberBot({ id: "pub", threadId: "t-pub", mainThreadId: "t-pub", tasks: [{ threadId: "t-pub-2" }, { threadId: "t-pub" }] }, other))
+      .toMatchObject({ id: "pub", threadId: "", tasks: [], activity: "idle", busy: false, unread: false, waitingForTeammates: false });
+    expect(other.attachment("private.png", () => ["t-pub-2"])).toBe(false);
+    expect(owner.attachment("private.png", () => ["t-pub-2"])).toBe(true);
+    expect(pathSubject("/api/bots/pub/tasks/t-pub-2/settings")).toEqual({ kind: "thread", id: "t-pub-2" });
+    expect(frameForMember({ kind: "message", threadId: "t-pub-2", message: { id: "secret" } }, context(other), seen())).toBeUndefined();
   });
 });
 
@@ -451,7 +482,7 @@ describe("a Team Cloud's audiences", () => {
     expect(sent).toEqual({ id: "pub", tasks: [{ threadId: "t-pub" }] });
     const ada = new VisibleSet(open, openGroups, ADA, undefined, { of: audienceOf, person: ADA_KEY });
     expect(memberBot({ id: "pub", tasks: [{ threadId: "t-pub" }, { threadId: "t-pub-2" }] }, ada).tasks).toHaveLength(2);
-    // Off a team the list is untouched.
-    expect(memberBot({ id: "pub", tasks: [{ threadId: "t-pub-2" }] }, new VisibleSet(bots, groups, BOB)).tasks).toEqual([{ threadId: "t-pub-2" }]);
+    // On a self-hosted install legacy direct threads have no provable private owner.
+    expect(memberBot({ id: "pub", tasks: [{ threadId: "t-pub-2" }] }, new VisibleSet(bots, groups, BOB)).tasks).toEqual([]);
   });
 });

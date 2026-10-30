@@ -48,7 +48,7 @@ vi.mock("@/lib/call", async (importOriginal) => ({
 }));
 vi.mock("@/lib/local-voice", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/local-voice")>(),
-  localSystemVoiceActive: () => false,
+  localDeviceVoiceActive: () => false,
 }));
 vi.mock("@/lib/analytics", () => ({ track: fixture.track }));
 // No exit animation, so the help card shows exactly while it is open.

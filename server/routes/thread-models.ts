@@ -16,6 +16,7 @@ export interface ThreadModelRouteDeps {
   } | null | undefined;
   busy(botId: string, threadId: string): boolean;
   follow(botId: string, threadIds: string[]): string[];
+  threadVisible?(auth: RequestAuth, threadId: string): boolean;
   /** On a Cloud home, only its owner. */
   mayChangeModel(auth: RequestAuth): boolean;
   reply(botId: string): unknown;
@@ -38,11 +39,15 @@ export function createThreadModelRoutes(deps: ThreadModelRouteDeps): RouteHandle
     }
     const tasks = bot.tasks ?? [];
     const ids = new Set(tasks.map((task) => task.threadId));
+    const threadVisible = (threadId: string) => deps.threadVisible?.(auth, threadId) ?? true;
+    if (Array.isArray(raw) && (raw as string[]).some((threadId) => !threadVisible(threadId))) {
+      return json(res, 404, { error: "no such conversation" });
+    }
     const foreign = (raw as string[] | undefined)?.find((id) => !ids.has(id));
     if (foreign !== undefined) return json(res, 400, { error: `"${foreign}" is not one of this bot's threads` });
     if (bot.approvalGrant) return json(res, 409, { error: "wait for the approval-level change to finish before changing models" });
     const listed = raw === undefined ? null : new Set(raw as string[]);
-    const own = tasks.filter((task) => (!listed || listed.has(task.threadId)) &&
+    const own = tasks.filter((task) => threadVisible(task.threadId) && (!listed || listed.has(task.threadId)) &&
       task.modelSelection !== undefined && !sameModelSelection(task.modelSelection, bot.modelSelection));
     const busy = own.filter((task) => deps.busy(bot.id, task.threadId));
     const switched = deps.follow(bot.id, own.filter((task) => !busy.includes(task)).map((task) => task.threadId));

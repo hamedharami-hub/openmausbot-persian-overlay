@@ -29,8 +29,16 @@ describe("files a page may receive", () => {
 
   it("refuses any other file, including one reached through a symlink or a ..", () => {
     const { attachments, outside, roots } = folders();
-    symlinkSync(join(outside, "secret.txt"), join(attachments, "looks-attached.txt"));
-    for (const file of [join(outside, "secret.txt"), join(attachments, "looks-attached.txt"), join(attachments, "..", "outside", "secret.txt"), process.execPath]) {
+    const link = join(attachments, "looks-attached.txt");
+    try {
+      symlinkSync(join(outside, "secret.txt"), link);
+    } catch (cause) {
+      const code = (cause as NodeJS.ErrnoException).code;
+      if (!new Set(["EPERM", "EACCES", "ENOTSUP", "EOPNOTSUPP"]).has(code ?? "")) throw cause;
+    }
+    const files = [join(outside, "secret.txt"), join(attachments, "..", "outside", "secret.txt"), process.execPath];
+    if (existsSync(link)) files.push(link);
+    for (const file of files) {
       expect(uploadableFiles([file], roots)).toEqual({ error: expect.stringMatching(/cannot be uploaded/) });
     }
   });

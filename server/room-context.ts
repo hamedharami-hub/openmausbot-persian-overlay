@@ -1,6 +1,7 @@
 import type { ModelCatalog } from "./contracts.ts";
 import { contextWindowFor } from "./context-budget.ts";
 import { sessionIdlePolicy } from "./drivers/session-idle.ts";
+import { contextBudgetInputLimit, type EffectiveContextBudget } from "../shared/context-budget.ts";
 
 export const DEFAULT_ROOM_COMPACT_AT = 0.9;
 
@@ -13,7 +14,18 @@ export function roomCompactTokens(window: number, settings: { autoCompact?: bool
   return value < 1 ? Math.floor(window * value) : Math.floor(value);
 }
 
-type Measured = RoomMemberContext & { instanceId?: string; at: number };
+export function roomContextBudgetSettings(
+  window: number,
+  settings: { autoCompact?: boolean; roomCompactAt?: number } | undefined,
+  budget: EffectiveContextBudget,
+): { autoCompact?: boolean; roomCompactAt?: number } | undefined {
+  const current = roomCompactTokens(window, settings);
+  if (current === null) return settings;
+  const target = Math.max(1, Math.floor(contextBudgetInputLimit(window, budget) * DEFAULT_ROOM_COMPACT_AT));
+  return { ...settings, roomCompactAt: Math.min(current, target) };
+}
+
+type Measured = RoomMemberContext & { instanceId?: string; model?: string; at: number };
 
 export type RoomContextClock = {
   idleMs?: number;
@@ -50,6 +62,7 @@ export class RoomContextTracker {
     const measured: Measured = {
       tokens: Math.trunc(tokens),
       window: contextWindowFor(model, catalog, reading?.window),
+      ...(model ? { model } : {}),
       ...(previous?.compactRequested ? { compactRequested: true as const } : {}),
       ...(instanceId ? { instanceId } : {}),
       at: this.now(),
@@ -73,6 +86,14 @@ export class RoomContextTracker {
     if (!members.size) return undefined;
     return Object.fromEntries([...members].map(([botId, { tokens, window, compactRequested }]) =>
       [botId, { tokens, window, ...(compactRequested ? { compactRequested } : {}) }]));
+  }
+
+  /** A reported window is reusable only for the same provider instance and model that produced it. */
+  forModel(threadId: string, botId: string, instanceId: string, model: string): RoomMemberContext | undefined {
+    const current = this.live(threadId, botId);
+    if (!current || current.model !== model || (current.instanceId && current.instanceId !== instanceId)) return undefined;
+    const { tokens, window, compactRequested } = current;
+    return { tokens, window, ...(compactRequested ? { compactRequested: true } : {}) };
   }
 
   dispatch(threadId: string, botId: string, instanceId: string, settings: { autoCompact?: boolean; roomCompactAt?: number } | undefined):

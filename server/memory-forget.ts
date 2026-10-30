@@ -79,7 +79,7 @@ export type BotMemoryResult = MemoryUpdateResult | { ok: true; forgotten: string
 export function botMemoryUpdate(
   layer: string,
   body: { action?: unknown; text?: unknown; oldText?: unknown; until?: unknown },
-  opts: { source: string; aboutMe: Pick<AboutMe, "forget"> | null },
+  opts: { source: string; aboutMe: Pick<AboutMe, "forget"> | null; forgottenScopeKey?: string },
 ): BotMemoryResult {
   if (body.action === "forget") {
     const passage = typeof body.oldText === "string" ? body.oldText : "";
@@ -88,9 +88,11 @@ export function botMemoryUpdate(
     const forgotten = forgetInNotes(layer, mentions);
     if (!opts.aboutMe) return { ok: true, forgotten, aboutMe: [] };
     const aboutMe = opts.aboutMe.forget(layer, mentions);
-    rememberForgotten(passage, mentions);
+    rememberForgotten(passage, mentions, opts.forgottenScopeKey);
     return { ok: true, forgotten, aboutMe };
   }
-  if (body.action === "append" && typeof body.text === "string") clearForgotten(body.text);
+  // A bot can append a note from another person's or a room's turn. Only the
+  // conversation whose profile it is allowed to change may clear that person's tombstone.
+  if (body.action === "append" && typeof body.text === "string" && opts.aboutMe) clearForgotten(body.text, opts.forgottenScopeKey);
   return updateMemory(layer, { action: body.action, text: body.text, oldText: body.oldText, ...(body.until !== undefined ? { until: body.until } : {}) } as MemoryUpdate, { source: opts.source });
 }

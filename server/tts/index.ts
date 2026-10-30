@@ -4,9 +4,10 @@ import * as chatterbox from "./chatterbox.ts";
 import * as elevenlabs from "./elevenlabs.ts";
 import * as grok from "./grok.ts";
 import * as fish from "./fish.ts";
+import * as gemini from "./gemini.ts";
 import * as systemVoices from "./system-voices.ts";
 
-export type VoiceProvider = "elevenlabs" | "fish" | "system" | "chatterbox" | "xai";
+export type VoiceProvider = "gemini" | "elevenlabs" | "fish" | "system" | "chatterbox" | "xai";
 
 export class NoVoiceConfigured extends Error {
   // Not a parameter property: the harness runs under strip-only `node --experimental-strip-types`, which rejects one at load.
@@ -16,7 +17,7 @@ export class NoVoiceConfigured extends Error {
     super(
       hint ??
         (reason === "key"
-          ? "Add an ElevenLabs key in Settings on the computer to turn on voice."
+          ? "Add a Gemini API key in Settings to turn on Gemini voice."
           : "Pick a voice in the agent profile."),
     );
     this.reason = reason;
@@ -27,12 +28,16 @@ const elevenLabs = (cfg: AppConfig) => voiceCredential(cfg.tts?.key);
 
 export function voiceProvider(cfg: AppConfig): VoiceProvider {
   const provider = cfg.tts?.provider;
-  return provider === "xai" || provider === "fish" || provider === "system" || provider === "chatterbox" ? provider : "elevenlabs";
+  if (provider === "gemini" || provider === "xai" || provider === "fish" || provider === "system" || provider === "chatterbox" || provider === "elevenlabs") return provider;
+  // Prefer free Gemini on a self-host with no configured voice service. Keep the existing
+  // ElevenLabs path for legacy keys and Cloud Pro's included voice.
+  return elevenLabs(cfg) ? "elevenlabs" : "gemini";
 }
 
 export function providerConfigured(cfg: AppConfig): boolean {
   const provider = voiceProvider(cfg);
   if (provider === "xai") return Boolean(cfg.xai?.key);
+  if (provider === "gemini") return Boolean(cfg.gemini?.apiKey);
   if (provider === "system") return systemVoices.systemVoicesAvailable();
   if (provider === "chatterbox") return Boolean(cfg.tts?.baseUrl?.trim());
   if (provider === "fish") return Boolean(cfg.tts?.fishKey);
@@ -42,6 +47,7 @@ export function providerConfigured(cfg: AppConfig): boolean {
 export function voiceConfigured(cfg: AppConfig): boolean {
   const provider = voiceProvider(cfg);
   if (provider === "xai") return Boolean(cfg.xai?.key && cfg.tts?.voice);
+  if (provider === "gemini") return Boolean(cfg.gemini?.apiKey && cfg.tts?.voice);
   if (provider === "system") {
     return systemVoices.systemVoicesAvailable() && Boolean(cfg.tts?.voice);
   }
@@ -53,6 +59,7 @@ export function voiceConfigured(cfg: AppConfig): boolean {
 export function voiceReady(cfg: AppConfig, voiceId?: string): boolean {
   const provider = voiceProvider(cfg);
   if (provider === "xai") return Boolean(cfg.xai?.key && (voiceId || cfg.tts?.voice));
+  if (provider === "gemini") return Boolean(cfg.gemini?.apiKey && (voiceId || cfg.tts?.voice));
   if (provider === "system") {
     return systemVoices.systemVoicesAvailable() && Boolean(voiceId || cfg.tts?.voice);
   }
@@ -70,6 +77,7 @@ export function describeVoice(cfg: AppConfig) {
     ready: voiceConfigured(cfg),
     voice: cfg.tts?.voice ?? "",
     provider,
+    ...(provider === "gemini" ? { geminiModel: cfg.tts?.geminiModel ?? gemini.DEFAULT_MODEL } : {}),
     baseUrl: provider === "chatterbox" ? (cfg.tts?.baseUrl ?? "") : "",
     model: provider === "chatterbox" ? (cfg.tts?.model ?? "") : "",
     ...(provider === "fish" ? { fishModel: cfg.tts?.fishModel ?? fish.DEFAULT_FISH_MODEL } : {}),
@@ -87,6 +95,7 @@ export async function listVoices(
   search?: fish.VoiceSearch,
 ): Promise<elevenlabs.Voice[]> {
   const provider = voiceProvider(cfg);
+  if (provider === "gemini") return gemini.VOICES;
   if (provider === "xai") return cfg.xai?.key ? grok.listVoices(cfg.xai.key) : [];
   if (provider === "system") return systemVoices.listSystemVoices(run);
   if (provider === "chatterbox") {
@@ -110,6 +119,13 @@ export async function addSharedVoice(cfg: AppConfig, publicOwnerId: string, voic
 
 export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner) {
   const provider = voiceProvider(cfg);
+  if (provider === "gemini") {
+    const key = cfg.gemini?.apiKey;
+    if (!key) throw new NoVoiceConfigured("key", "Add a Gemini API key from Google AI Studio in Settings to use free-tier Gemini voice.");
+    const voice = voiceId || cfg.tts?.voice;
+    if (!voice) throw new NoVoiceConfigured("voice");
+    return gemini.synthesize(text, voice, key, cfg.tts?.geminiModel ?? gemini.DEFAULT_MODEL);
+  }
   if (provider === "xai") {
     const key = cfg.xai?.key;
     if (!key) throw new NoVoiceConfigured("key", "Add an xAI key in Settings to use Grok voice.");

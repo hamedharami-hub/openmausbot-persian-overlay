@@ -40,6 +40,7 @@ import { parseConnectorTools } from "./connector-tools.ts";
 import { sameModelSelection } from "../shared/thread-model.ts";
 import { initialGreetingMessage } from "./initial-greeting.ts"; import { createDefaultBot, defaultBotRefusal, type DefaultBotIntro } from "./default-bot.ts";
 import { appsFromCreator } from "./inherited-apps.ts";
+import { pruneGroupMemberModels } from "../shared/group-member-model.ts";
 import { ThreadCache, type ThreadState } from "./thread-cache.ts";
 export type {
   BotActivity, ConnectorCardData, GroupDefaultResponder, OptionCardData,
@@ -102,7 +103,7 @@ export function toWireTask(task: TaskRecord, botModel: ModelSelection): WireTask
 const ASK_NOW = { approvalMode: "ask" as const, autoApprove: false, alwaysAllow: [] as string[] };
 
 const TASK_PATCH_FIELDS = [
-  "title", "projectId", "modelSelection", "approvalMode", "autoApprove", "alwaysAllow",
+  "title", "projectId", "modelSelection", "fallback", "approvalMode", "autoApprove", "alwaysAllow",
   "unread", "lastReadMessageId", "rewound", "archivedAt", "pinned", "pinnedMessageId", "resumeCursors", "lastInstanceId", "cwd",
   "routineRunId", "surface", "surfaceSource", "snoozedUntil", "link", "linkAuto", "appliedCompactionId", "contextFloor", "lastContextModel", "setupRequest",
 ] as const satisfies readonly (keyof TaskRecord)[];
@@ -494,6 +495,11 @@ export class Store {
       const normalized = normalizeGroupDefaultResponder(g.defaultResponder, g.memberIds, Boolean(g.dm));
       if (JSON.stringify(normalized) !== JSON.stringify(g.defaultResponder)) groupsMigrated = true;
       g.defaultResponder = normalized;
+      if (g.memberModels) {
+        const before = JSON.stringify(g.memberModels);
+        pruneGroupMemberModels(g);
+        if (JSON.stringify(g.memberModels) !== before) groupsMigrated = true;
+      }
       if (g.holds !== undefined || g.heldMessages !== undefined) {
         const before = JSON.stringify([g.holds, g.heldMessages]);
         pruneRoomHolds(g);
@@ -899,7 +905,7 @@ export class Store {
     );
   }
 
-  patchGroup(id: string, patch: Partial<Pick<GroupRecord, "name" | "memberIds" | "defaultResponder" | "bulletin" | "description" | "unread" | "lastReadMessageId" | "busyBotId" | "cwd" | "pinnedMessageId" | "section" | "setupCompletedAt" | "setupSkippedAt" | "audienceFloor" | "installedPackage" | "turnTimeoutMinutes" | "holds" | "heldMessages">>): GroupRecord | null {
+  patchGroup(id: string, patch: Partial<Pick<GroupRecord, "name" | "memberIds" | "defaultResponder" | "bulletin" | "description" | "memberModels" | "unread" | "lastReadMessageId" | "busyBotId" | "cwd" | "pinnedMessageId" | "section" | "setupCompletedAt" | "setupSkippedAt" | "audienceFloor" | "installedPackage" | "turnTimeoutMinutes" | "holds" | "heldMessages">>): GroupRecord | null {
     const group = this.group(id);
     if (!group) return null;
     if (Object.prototype.hasOwnProperty.call(patch, "section")) {
@@ -922,6 +928,7 @@ export class Store {
       }
       group.defaultResponder = normalizeGroupDefaultResponder(group.defaultResponder, group.memberIds, Boolean(group.dm));
       if (Object.prototype.hasOwnProperty.call(stored, "memberIds")) pruneRoomHolds(group);
+      if (Object.prototype.hasOwnProperty.call(stored, "memberIds") || Object.prototype.hasOwnProperty.call(stored, "memberModels")) pruneGroupMemberModels(group);
     });
     this.emit({ type: "group", groupId: group.id });
     return group;
@@ -1500,6 +1507,7 @@ export class Store {
       g.memberIds = g.memberIds.filter((member) => member !== id);
       if (g.busyBotId === id) { g.busyBotId = null; delete g.turnStartedAt; }
       g.defaultResponder = normalizeGroupDefaultResponder(g.defaultResponder, g.memberIds, false);
+      pruneGroupMemberModels(g);
     }
     if (rooms.length) {
       try { this.saveGroups(); } catch (error) { console.warn("store: room cleanup will retry on restart", error); }
@@ -2059,6 +2067,7 @@ export class Store {
       threadId: task.threadId,
       approvalGrant: bot.approvalGrant?.threadOnly && bot.approvalGrant.threadId !== threadId ? undefined : bot.approvalGrant,
       modelSelection: structuredClone(task.modelSelection ?? bot.modelSelection),
+      fallback: structuredClone(task.fallback ?? bot.fallback),
       resumeCursors: structuredClone(task.resumeCursors),
       ...threadApproval(task, bot),
       unread: Boolean(task.unread),
@@ -2188,11 +2197,13 @@ export class Store {
   }
 
   createTask(botId: string, title?: string, activate = true, projectId?: string, openedBy?: TaskOpenedBy, approvalMode?: "ask" | "full",
-    modelSelection?: ModelSelection, cwd?: string): TaskRecord | null {
+    modelSelection?: ModelSelection, cwd?: string, beforePersist?: (task: TaskRecord) => boolean): TaskRecord | null {
     const bot = this.bot(botId);
     if (!bot) return null;
     if (projectId !== undefined && !this.project(botId, projectId)) return null;
     const task = this.buildTask(bot, title, projectId, openedBy, approvalMode, modelSelection, cwd);
+    // A caller may persist a private-thread ACL before this task becomes visible or emits a live bot update.
+    if (beforePersist && !beforePersist(task)) return null;
     this.commitBotChange(bot, "the new thread", () => {
       bot.tasks = [task, ...(bot.tasks ?? [])];
       if (activate) this.mirrorActiveTask(bot, task);

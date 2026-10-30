@@ -1,12 +1,13 @@
 // Audio comes from the harness, which holds the voice keys: the renderer never sees them or calls a voice provider.
 
-import { localSystemVoiceActive, remoteSystemVoice, resolveLocalSystemVoice } from "@/lib/local-voice";
+import { localDeviceVoiceActive, remoteSystemVoice, resolveLocalDeviceVoice } from "@/lib/local-voice";
 import { recordBlockTiming, recordPrepared, recordSpeakEnter } from "../voice-latency-probe";
 
-export type SpeechStatus = "idle" | "preparing" | "speaking";
+export type SpeechStatus = "idle" | "preparing" | "speaking" | "paused";
 
 export interface SpeechSnapshot {
   status: SpeechStatus;
+  playbackRate?: number;
   botId?: string;
   messageId?: string;
   caption?: string;
@@ -39,11 +40,15 @@ export interface SpeechStream {
   fail(error: string): void;
 }
 
-type TtsPrepareBody = { ready?: boolean; utterances?: string[]; error?: string };
+type TtsPrepareBody = { ready?: boolean; utterances?: string[]; cacheNamespace?: string; error?: string };
 type TtsErrorBody = { error?: string };
 
 const IDLE: SpeechSnapshot = { status: "idle" };
 const PREFETCH_WINDOW = 3;
+const AUDIO_CACHE_TTL_MS = 30 * 60 * 1_000;
+const AUDIO_CACHE_MAX_ENTRIES = 40;
+const AUDIO_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const AUDIO_CACHE_MAX_CLIP_BYTES = 4 * 1024 * 1024;
 
 export class Speaker {
   private snapshot: SpeechSnapshot = IDLE;
@@ -55,8 +60,11 @@ export class Speaker {
   private request: AbortController | null = null;
   private localUtterance: SpeechSynthesisUtterance | null = null;
   private settleLocalSpeech: ((finished: boolean) => void) | null = null;
+  private playbackRate = 1;
   /** Identity is the claim object, not the callback, so an older release cannot clear a newer claim. */
   private externalClaim: { pause: () => void } | null = null;
+  /** Memory-only and bounded; text and clips are never written to disk by this cache. */
+  private renderedAudio = new Map<string, { blob: Blob; storedAt: number }>();
 
   subscribe(fn: (s: SpeechSnapshot) => void): () => void {
     this.watchers.add(fn);
@@ -76,6 +84,39 @@ export class Speaker {
   isSpeaking(messageId?: string): boolean {
     if (this.snapshot.status === "idle") return false;
     return messageId ? this.snapshot.messageId === messageId : true;
+  }
+
+  pauseOrResume(): void {
+    if (this.snapshot.status === "preparing") return;
+    if (this.audio) {
+      if (this.audio.paused) {
+        void this.audio.play().then(() => this.set({ ...this.snapshot, status: "speaking" })).catch(() => {
+          this.set({ ...this.snapshot, status: "paused", error: "The generated voice clip couldn't resume." });
+        });
+      } else {
+        this.audio.pause();
+        this.set({ ...this.snapshot, status: "paused" });
+      }
+      return;
+    }
+    if (!this.localUtterance || typeof window === "undefined") return;
+    if (this.snapshot.status === "paused") {
+      window.speechSynthesis?.resume();
+      this.set({ ...this.snapshot, status: "speaking" });
+    } else {
+      window.speechSynthesis?.pause();
+      this.set({ ...this.snapshot, status: "paused" });
+    }
+  }
+
+  cyclePlaybackRate(): number {
+    const rates = [0.75, 1, 1.25, 1.5, 1.75, 2];
+    const index = rates.indexOf(this.playbackRate);
+    this.playbackRate = rates[(index + 1) % rates.length] ?? 1;
+    if (this.audio) this.audio.playbackRate = this.playbackRate;
+    if (this.localUtterance) this.localUtterance.rate = this.playbackRate;
+    if (this.snapshot.status !== "idle") this.set({ ...this.snapshot, playbackRate: this.playbackRate });
+    return this.playbackRate;
   }
 
   stop() {
@@ -140,8 +181,8 @@ export class Speaker {
     this.request = controller;
     const live = () => this.token === mine && !controller.signal.aborted;
 
-    this.set({ status: "preparing", botId: opts.botId, messageId: opts.messageId });
-    return localSystemVoiceActive()
+    this.set({ status: "preparing", ...(opts.botId ? { botId: opts.botId } : {}), ...(opts.messageId ? { messageId: opts.messageId } : {}) });
+    return localDeviceVoiceActive()
       ? this.localStream(opts, live, controller)
       : this.networkStream(opts, live, controller);
   }
@@ -189,6 +230,7 @@ export class Speaker {
   private networkStream(opts: SpeakOptions, live: () => boolean, controller: AbortController): SpeechStream {
     type Rendered = { blob: Blob; error?: never } | { blob?: never; error: unknown };
     const pending: string[] = [];
+    let cacheNamespace = "";
     let closed = false;
     let finished = false;
     let running = false;
@@ -204,7 +246,7 @@ export class Speaker {
     };
     const render = (utterance: string, block: number): Promise<Rendered> => {
       recordBlockTiming(opts.messageId, block, "renderStart");
-      return this.render(utterance, opts.voiceId, controller.signal).then(
+      return this.render(utterance, opts.voiceId, controller.signal, cacheNamespace).then(
         (blob) => {
           recordBlockTiming(opts.messageId, block, "renderDone");
           return { blob };
@@ -280,9 +322,10 @@ export class Speaker {
         return drained;
       },
       prepare: async (text) => {
-        const utterances = await this.prepare(text, opts.voiceId, controller.signal);
-        recordPrepared(opts.messageId, utterances.length);
-        return utterances;
+        const prepared = await this.prepare(text, opts.voiceId, controller.signal);
+        cacheNamespace = prepared.cacheNamespace;
+        recordPrepared(opts.messageId, prepared.utterances.length);
+        return prepared.utterances;
       },
       identify: (messageId) => this.adoptMessageId(opts, live, messageId),
       cancel: () => { if (live()) this.stop(); },
@@ -315,7 +358,13 @@ export class Speaker {
 
     const synth = window.speechSynthesis;
     const utterance = new window.SpeechSynthesisUtterance(value);
-    const selected = resolveLocalSystemVoice(remoteSystemVoice(opts.botId));
+    utterance.rate = this.playbackRate;
+    const scriptIsPersian = /[\u0600-\u06FF]/u.test(value);
+    if (scriptIsPersian) utterance.lang = "fa-IR";
+    const selected = resolveLocalDeviceVoice(remoteSystemVoice(opts.botId)) ??
+      (scriptIsPersian
+        ? window.speechSynthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith("fa")) ?? null
+        : null);
     if (selected) utterance.voice = selected;
     this.localUtterance = utterance;
 
@@ -346,17 +395,17 @@ export class Speaker {
       utterance.onend = () => finish(true);
       utterance.onerror = (event) => {
         const interrupted = event.error === "canceled" || event.error === "interrupted";
-        finish(false, interrupted ? undefined : "This Mac could not play its selected voice.");
+        finish(false, interrupted ? undefined : "This device could not play its selected voice.");
       };
       try {
         synth.speak(utterance);
       } catch {
-        finish(false, "This Mac could not start its selected voice.");
+        finish(false, "This device could not start its selected voice.");
       }
     });
   }
 
-  private async prepare(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<string[]> {
+  private async prepare(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<{ utterances: string[]; cacheNamespace: string }> {
     const res = await fetch("/api/tts/prepare", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -368,10 +417,21 @@ export class Speaker {
     if (!body.ready) {
       throw new Error("Set up a voice provider in an agent profile on this computer, then pick a voice for the agent.");
     }
-    return body.utterances ?? [];
+    return { utterances: body.utterances ?? [], cacheNamespace: body.cacheNamespace ?? "" };
   }
 
-  private async render(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<Blob> {
+  private async render(text: string, voiceId: string | undefined, signal: AbortSignal, cacheNamespace: string): Promise<Blob> {
+    const key = JSON.stringify([cacheNamespace, voiceId ?? "", text]);
+    const now = Date.now();
+    for (const [cachedKey, value] of this.renderedAudio) {
+      if (now - value.storedAt >= AUDIO_CACHE_TTL_MS) this.renderedAudio.delete(cachedKey);
+    }
+    const cached = this.renderedAudio.get(key);
+    if (cached) {
+      this.renderedAudio.delete(key);
+      this.renderedAudio.set(key, cached);
+      return cached.blob;
+    }
     const res = await fetch("/api/tts/speak", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -382,7 +442,17 @@ export class Speaker {
       const body: TtsErrorBody = await res.json().catch(() => ({}));
       throw new Error(body.error ?? `the voice service returned ${res.status}`);
     }
-    return res.blob();
+    const blob = await res.blob();
+    if (!signal.aborted && blob.size > 0 && blob.size <= AUDIO_CACHE_MAX_CLIP_BYTES) {
+      this.renderedAudio.set(key, { blob, storedAt: now });
+      while (this.renderedAudio.size > AUDIO_CACHE_MAX_ENTRIES ||
+        [...this.renderedAudio.values()].reduce((sum, value) => sum + value.blob.size, 0) > AUDIO_CACHE_MAX_BYTES) {
+        const oldest = this.renderedAudio.keys().next().value;
+        if (oldest === undefined) break;
+        this.renderedAudio.delete(oldest);
+      }
+    }
+    return blob;
   }
 
   private play(blob: Blob, live: () => boolean, probeMessageId?: string, probeBlock?: number): Promise<boolean> {
@@ -391,6 +461,7 @@ export class Speaker {
       this.teardownAudio();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      audio.playbackRate = this.playbackRate;
       this.audio = audio;
       this.objectUrl = url;
       let settled = false;
