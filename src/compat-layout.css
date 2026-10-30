@@ -1,0 +1,121 @@
+.glass-bar[data-glass-bar="top"] {
+  background: var(--color-panel);
+}
+
+[data-table-dialog] {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 767px) {
+  [data-message-role="assistant"] [data-message-line] {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-message-line] > [data-chat-bubble] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-reply-blocks] > div:has(> [data-chat-bubble]) {
+    flex-wrap: wrap;
+  }
+
+  [data-message-role="assistant"] [data-reply-blocks] [data-chat-bubble],
+  [data-message-role="assistant"] [data-reply-table] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] [data-message-line] > :not([data-chat-bubble]) {
+    order: 1;
+  }
+
+  [data-message-role="assistant"] .reply-bubble,
+  [data-message-role="assistant"] [data-conversational-reply] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  [data-message-role="assistant"] .chat-md {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+}
+
+/* Sidebar surface. Presentation only: no component, prop or data shape changes,
+   so the upstream sidebar keeps working across upgrades. */
+
+/* 1. Give the panel a little depth and soften the divider. */
+aside[data-sidebar] {
+  background: color-mix(in srgb, var(--color-panel) 94%, var(--color-ink));
+  border-right-color: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+
+/* 2. Conversation rows: even rhythm, rounded, and a quiet accent bar when current. */
+[data-sidebar-thread-row] {
+  border-radius: 10px;
+}
+
+[data-sidebar-thread-row][aria-current="page"] {
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+/* 3. Section headers: one step quieter than the rows. */
+aside[data-sidebar] [data-section] {
+  opacity: 0.9;
+}
+
+aside[data-sidebar] [data-section] span {
+  font-size: 11.5px;
+}
+
+/* 4. Persian text needs room, not tracking. */
+aside[data-sidebar] {
+  line-height: 1.85;
+}
+
+aside[data-sidebar] button {
+  letter-spacing: 0;
+}
+
+/* 5. Breathing room between sections. */
+aside[data-sidebar] [data-sidebar-section-id] {
+  padding-top: 6px;
+}
+
+/* 6. A slim scrollbar inside the panel. */
+aside[data-sidebar] *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+aside[data-sidebar] *::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  border-radius: 8px;
+}
+
+aside[data-sidebar] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 7. The icon rail tiles. */
+[data-sidebar-tile] {
+  border-radius: 12px;
+}
+
+[data-sidebar-tile]:hover {
+  background: color-mix(in srgb, var(--color-raised-hover) 70%, transparent);
+}
+
+/* 8. The top row stays put while the list scrolls under it. */
+[data-sidebar-top-row] {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--color-panel) 88%, transparent);
+}
