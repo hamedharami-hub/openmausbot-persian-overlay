@@ -13,6 +13,17 @@ interface NativeProjectStore {
   botByThread(threadId: string): { id: string; section?: string } | null | undefined;
   taskByThread(botId: string, threadId: string): unknown;
   groupByThread(threadId: string): { memberIds: string[]; section?: string } | undefined;
+  /** Epoch ms of the newest message in a thread, when the native store knows it. */
+  threadActivity?(threadId: string): number | undefined;
+}
+
+/** Days without activity before an open task is marked as stalled. The status is never changed. */
+function staleDaysFromEnv(): number | undefined {
+  const raw = process.env.OMB_COMPANY_STALE_DAYS;
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const value = Number(raw.trim());
+  if (!Number.isSafeInteger(value) || value < 1 || value > 365) return undefined;
+  return value;
 }
 
 export async function createCompanyFeature(native: NativeProjectStore, dataDir: string) {
@@ -20,6 +31,18 @@ export async function createCompanyFeature(native: NativeProjectStore, dataDir: 
     ? await import(pathToFileURL(resolve(process.env.OMB_COMPANY_MODULE)).href)
     : bundled;
   const store = module.createStore(join(dataDir, "company-layer.json"));
+  /** The newest message time of a linked conversation, so a stalled task can be spotted. */
+  const threadActivity = (threadId: string): number | undefined => {
+    if (!threadId) return undefined;
+    if (typeof native.threadActivity === "function") return native.threadActivity(threadId);
+    const bot = native.botByThread(threadId);
+    const botTask = bot ? native.taskByThread(bot.id, threadId) as { updatedAt?: number } | undefined : undefined;
+    if (Number.isFinite(botTask?.updatedAt)) return botTask?.updatedAt;
+    const group = native.groupByThread(threadId) as { tasks?: readonly { threadId: string; updatedAt?: number }[] } | undefined;
+    const groupTask = group?.tasks?.find(candidate => candidate.threadId === threadId);
+    return Number.isFinite(groupTask?.updatedAt) ? groupTask?.updatedAt : undefined;
+  };
+  const staleDays = staleDaysFromEnv();
   const route: RouteHandler = async ctx => {
     if (!(ctx.path === "/company" || ctx.path === "/api/company" || ctx.path.startsWith("/api/company/"))) return PASS;
     if (ctx.method === "GET" && (ctx.path === "/company" || ctx.path === "/api/company/ui") && ctx.auth.scopes.includes("admin")) {
@@ -30,6 +53,8 @@ export async function createCompanyFeature(native: NativeProjectStore, dataDir: 
     const handled = await module.companyHandle(ctx.req, ctx.res, {
       method: ctx.method, path: ctx.path, auth: ctx.auth,
       native,
+      threadActivity,
+      staleDays,
       ensureSection: (section, botIds) => {
         if (native.setBotsSection && section) native.setBotsSection(botIds, section);
       },

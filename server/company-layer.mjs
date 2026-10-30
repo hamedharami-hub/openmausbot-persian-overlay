@@ -115,6 +115,36 @@ export function projectTaskProgress(project) {
   return { total: accepted.length, verified, percent: accepted.length ? Math.round(verified * 100 / accepted.length) : null };
 }
 
+export const STALE_TASK_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+/**
+ * Derived, never persisted: an accepted task whose conversation and board record have both been
+ * quiet for too long. The status is not changed and nothing is written to disk; the board only
+ * marks the task as stalled so a person can look at it.
+ */
+export function markStaleTasks(state, options = {}) {
+  const staleDays = Number.isSafeInteger(options.staleDays) && options.staleDays > 0 ? options.staleDays : STALE_TASK_DAYS;
+  const now = Number.isFinite(options.now) ? options.now : Date.now();
+  const activity = typeof options.activity === "function" ? options.activity : () => undefined;
+  const threshold = staleDays * DAY_MS;
+  const projects = state.projects.map(project => {
+    let staleCount = 0;
+    const tasks = project.tasks.map(task => {
+      if (task.status !== "open") return task;
+      const stamp = Date.parse(task.updatedAt ?? task.createdAt ?? "");
+      if (!Number.isFinite(stamp)) return task;
+      const last = task.threadId ? activity(task.threadId) : undefined;
+      const touched = Math.max(stamp, Number.isFinite(last) ? last : stamp);
+      if (now - touched < threshold) return task;
+      staleCount += 1;
+      return { ...task, stale: true, staleDays: Math.floor((now - touched) / DAY_MS), staleSince: new Date(touched).toISOString() };
+    });
+    return { ...project, tasks, staleCount };
+  });
+  return { ...state, projects, staleDays };
+}
+
 export function createStore(file) {
   const load = () => {
     try {
@@ -792,9 +822,10 @@ export async function companyHandle(req, res, ctx, store, botsFile) {
     }
     if (method === "GET" && path === "/api/company") {
       const state = ctx.native ? syncWithDepartments(store, ctx.native) : store.load();
+      const marked = markStaleTasks(state, { activity: ctx.threadActivity, now: Date.now(), staleDays: ctx.staleDays });
       return send(200, {
-        ...state,
-        projects: state.projects.map(project => ({ ...project, progress: projectTaskProgress(project) })),
+        ...marked,
+        projects: marked.projects.map(project => ({ ...project, progress: projectTaskProgress(project) })),
         bots: companyBots(botsFile, ctx.native?.bots),
         sections: Array.isArray(ctx.native?.sections) ? ctx.native.sections : [],
       });
