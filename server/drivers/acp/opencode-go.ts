@@ -819,6 +819,10 @@ function openCodeLoginsFingerprint(env: Record<string, string | undefined>): str
 const support = (loadCatalog: OpenCodeCatalogLoader, ownAccess = new Map<string, boolean>()): AcpSupport => ({
   driverKind: "opencodeGo",
   displayName: "OpenCode",
+  // OpenCode 1.19 advertises ACP image input, and its own `read` tool hands a picture to the
+  // model the same way. Saying so here is what lets the server send an attached picture — and
+  // the pages of an attached PDF — as native image input instead of only a path.
+  images: true,
   models: NO_MODELS,
   defaultCli: "opencode",
   nativeSource: "opencode.acp",
