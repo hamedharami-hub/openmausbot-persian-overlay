@@ -6,6 +6,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { ATTACHMENTS_DIR, IMAGE_MAX_BYTES } from "./attachments.ts";
 import type { TurnImageInput } from "./contracts.ts";
 import { decodeAttachmentAttribute } from "./message-file.ts";
+import { renderPdfPages } from "./pdf-pages.ts";
 
 export const TURN_IMAGE_MAX_COUNT = 4;
 export const TURN_IMAGE_MAX_BYTES = TURN_IMAGE_MAX_COUNT * IMAGE_MAX_BYTES;
@@ -24,8 +25,12 @@ type TagCandidate = { start: number; end: number; path: string };
 
 const OWNED_IMAGE_NAME =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
+const OWNED_DOCUMENT_NAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.pdf$/;
 const IMAGE_TAG =
   /^<attached-image[\t ]+path="([^"\r\n]*)"(?:[\t ]+name="([^"\r\n]*)")?[\t ]*\/>$/;
+const FILE_TAG =
+  /^<attached-file[\t ]+path="([^"\r\n]*)"(?:[\t ]+name="([^"\r\n]*)")?[\t ]*\/>$/;
 
 const MIME_BY_EXTENSION: Readonly<Record<string, TurnImageInput["mime"]>> = {
   ".png": "image/png",
@@ -49,7 +54,7 @@ function walk(node: MarkdownNode, visit: (node: MarkdownNode) => void): void {
 }
 
 /** Standalone tags only: prose that contains a tag literal must not become an attachment capability. */
-function imageTagCandidates(text: string): TagCandidate[] {
+function tagCandidates(text: string, pattern: RegExp): TagCandidate[] {
   const candidates: TagCandidate[] = [];
   walk(fromMarkdown(text) as MarkdownNode, (node) => {
     if (node.type !== "html" || !node.value || !node.position) return;
@@ -60,11 +65,19 @@ function imageTagCandidates(text: string): TagCandidate[] {
     const nextLine = text.indexOf("\n", end);
     const lineEnd = nextLine < 0 ? text.length : nextLine;
     if (text.slice(lineStart, start).trim() || text.slice(end, lineEnd).trim()) return;
-    const match = IMAGE_TAG.exec(node.value);
+    const match = pattern.exec(node.value);
     if (!match) return;
     candidates.push({ start, end, path: decodeAttachmentAttribute(match[1]!) });
   });
   return candidates;
+}
+
+function imageTagCandidates(text: string): TagCandidate[] {
+  return tagCandidates(text, IMAGE_TAG);
+}
+
+function fileTagCandidates(text: string): TagCandidate[] {
+  return tagCandidates(text, FILE_TAG);
 }
 
 function ownedImage(path: string, attachmentsDir: string): TurnImageInput | null {
@@ -95,6 +108,31 @@ export interface ExtractTurnImagesOptions {
   attachmentsDir?: string;
   maxCount?: number;
   maxBytes?: number;
+  /** An attached PDF's pages become native image input, so the model reads the document itself. */
+  pdfPages?: boolean;
+}
+
+/** A PDF in this store, by the same ownership rule an image must pass. */
+function ownedPdf(path: string, attachmentsDir: string): string | null {
+  if (!path || path.includes("\0")) return null;
+  const name = path.split(/[\\/]/).at(-1) ?? "";
+  if (!OWNED_DOCUMENT_NAME.test(name)) return null;
+
+  const expected = resolve(attachmentsDir, name);
+  if (resolve(path) !== expected) return null;
+
+  try {
+    const entry = lstatSync(expected);
+    if (!entry.isFile() || entry.isSymbolicLink() || entry.size <= 0) return null;
+    const canonicalRoot = realpathSync(attachmentsDir);
+    const canonicalFile = realpathSync(expected);
+    if (dirname(canonicalFile) !== canonicalRoot) return null;
+    const finalEntry = statSync(canonicalFile);
+    if (!finalEntry.isFile() || finalEntry.size !== entry.size) return null;
+    return expected;
+  } catch {
+    return null;
+  }
 }
 
 /** Invalid tags stay visible as ordinary text and never become native image input. */
@@ -102,7 +140,9 @@ export function extractTurnImages(
   text: string,
   options: ExtractTurnImagesOptions = {},
 ): { text: string; images: TurnImageInput[] } {
-  if (!text.includes("<attached-image")) return { text, images: [] };
+  const wantsImages = text.includes("<attached-image");
+  const wantsPdfPages = options.pdfPages === true && text.includes("<attached-file");
+  if (!wantsImages && !wantsPdfPages) return { text, images: [] };
 
   const attachmentsDir = options.attachmentsDir ?? ATTACHMENTS_DIR;
   const maxCount = options.maxCount ?? TURN_IMAGE_MAX_COUNT;
@@ -123,6 +163,27 @@ export function extractTurnImages(
   for (const { tag } of admitted.toReversed()) {
     providerText = providerText.slice(0, tag.start) + providerText.slice(tag.end);
   }
+
+  // A PDF is read by looking at its pages. The file tag stays in the text: the bot still has the
+  // document's name and path, and a model without picture input can open it with its own tools.
+  if (wantsPdfPages) {
+    const rendered: TurnImageInput[] = [];
+    for (const tag of fileTagCandidates(text)) {
+      const pdf = ownedPdf(tag.path, attachmentsDir);
+      if (!pdf) continue;
+      const pages = renderPdfPages(pdf);
+      if (pages.length === 0) continue;
+      const room = maxCount - admitted.length - rendered.length;
+      if (room <= 0) break;
+      rendered.push(...pages.slice(0, room));
+    }
+    if (rendered.length > 0) {
+      const total = admitted.reduce((sum, item) => sum + item.image.bytes, 0) +
+        rendered.reduce((sum, image) => sum + image.bytes, 0);
+      if (total <= maxBytes) admitted.push(...rendered);
+    }
+  }
+
   return { text: providerText, images: admitted.map((item) => item.image) };
 }
 

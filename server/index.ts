@@ -7421,7 +7421,7 @@ async function acceptDirectSend(
         const personsOwn = personPresent && !app && (trigger.kind === "user" || trigger.kind === "owner"), queuedPrompt = (app?.context ?? "") + promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId));
         const instance = runningTurnInstance(currentAtStart, threadId);
         let steered: SteerOutcome = "refused";
-        const steerInput = extractTurnImages(text);
+        const steerInput = extractTurnImages(text, { pdfPages: true });
         const carriesImages = steerInput.images.length > 0;
         const steerTarget = handoffs.current(threadId);
         const busyAdmission = admit("direct-busy", {
@@ -7764,7 +7764,7 @@ async function startTurn(
   if (guestConfined && instance.adapter.capabilities.guestTurns !== "confined") {
     throw Object.assign(new Error(guestEngineRefusal(threadId)), { status: 409, code: "guest_engine" });
   }
-  const resolvedImages = extractTurnImages(text);
+  const resolvedImages = extractTurnImages(text, { pdfPages: true });
   const usesNativeImageInput = instance.adapter.capabilities.nativeImageInput === true;
   let providerText = promptWithDataContext(usesNativeImageInput ? resolvedImages.text : text, opts?.dataContext);
   const turnImages = usesNativeImageInput ? resolvedImages.images : [];
@@ -7990,7 +7990,7 @@ async function startTurn(
         userNameFor(threadId),
       ), personLine ? activeMessages : [], skipTranscript, userNameFor(threadId));
       const replay = usesNativeImageInput
-        ? extractReplayImages(selection.inline, turnImages)
+        ? extractReplayImages(selection.inline, turnImages, { pdfPages: true })
         : { transcript: selection.inline, images: [] };
       const decideContext = (config: string) => {
         // A Codex thread keeps the last effort it was sent and no turn can clear it, so one holding a level is rebuilt, not resumed.
@@ -9913,7 +9913,7 @@ async function runClaimedGroupMemberTurn(
     for (const message of store.activePath(threadId)) {
       if (message.role !== "user" || message.kind !== "text" || !message.text) continue;
       if (!message.queueId || !burstIds.has(message.queueId)) continue;
-      const resolved = extractTurnImages(message.text);
+      const resolved = extractTurnImages(message.text, { pdfPages: true });
       burstOverrides.push({ messageId: message.id, text: resolved.text });
       burstImages.push(...resolved.images);
     }
@@ -9921,7 +9921,7 @@ async function runClaimedGroupMemberTurn(
   // The latest line is usually the burst's last: extracting it again would double-count its attachments.
   const latestInBurst = latestUser?.queueId !== undefined && burstIds.has(latestUser.queueId);
   const resolvedLatestImages = latestUser?.text && !cardContinuation && !latestInBurst
-    ? extractTurnImages(latestUser.text)
+    ? extractTurnImages(latestUser.text, { pdfPages: true })
     : { text: latestUser?.text ?? "", images: [] };
   const roomWindow = roomTranscript.window(
     threadId,
