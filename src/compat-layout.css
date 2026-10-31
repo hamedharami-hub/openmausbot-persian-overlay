@@ -52,7 +52,7 @@
 /* 1. Give the panel a little depth and soften the divider. */
 aside[data-sidebar] {
   background: color-mix(in srgb, var(--color-panel) 94%, var(--color-ink));
-  border-right-color: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  border-inline-end-color: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 /* 2. Conversation rows: even rhythm, rounded, and a quiet accent bar when current. */
@@ -119,3 +119,18 @@ aside[data-sidebar] *::-webkit-scrollbar-track {
   backdrop-filter: blur(8px);
   background: color-mix(in srgb, var(--color-panel) 88%, transparent);
 }
+
+/* 9. A right-to-left page puts the sidebar on the right, so the pieces that hang off its
+   edges follow it there. The phone's drawer slides toward the edge it lives on: a fixed
+   -100% would push it past the viewport in a right-to-left page and leave the whole page
+   scrolling sideways. */
+@media (max-width: 767px) {
+  aside[data-sidebar].sidebar-drawer-closed {
+    translate: -100% 0;
+  }
+
+  html[dir="rtl"] aside[data-sidebar].sidebar-drawer-closed {
+    translate: 100% 0;
+  }
+}
+
