@@ -7,6 +7,7 @@ import {
   clampSidebarWidth,
   loadSidebarWidth,
   saveSidebarWidth,
+  useSidebarDefaultWidth,
   type SidebarDensity,
 } from "@/lib/sidebar-preferences";
 
@@ -23,7 +24,11 @@ export function useSidebarWidth({ simple, density, sidePanelOpen, sidebarRef }: 
   sidebarRef: RefObject<HTMLElement | null>;
 }) {
   const key = simple ? SIMPLE_SIDEBAR_WIDTH_KEY : SIDEBAR_WIDTH_KEY;
-  const defaultWidth = sidebarDefaultWidth(density, simple);
+  const preferredWidth = useSidebarDefaultWidth();
+  // The chosen width is the one the sidebar starts at, and the one it keeps while a side panel is open.
+  const defaultWidth = density === "compact"
+    ? sidebarDefaultWidth(density, simple)
+    : preferredWidth ?? sidebarDefaultWidth(density, simple);
   const cap = simple ? 400 : 480;
   const maxWidth = sidePanelOpen ? defaultWidth : Math.min(cap, window.innerWidth - 320);
   const [savedWidth, setSavedWidth] = useState<number | null>(() => loadSidebarWidth(undefined, key));

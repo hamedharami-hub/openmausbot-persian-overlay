@@ -122,6 +122,9 @@ const DAY_MS = 86_400_000;
  * Derived, never persisted: an accepted task whose conversation and board record have both been
  * quiet for too long. The status is not changed and nothing is written to disk; the board only
  * marks the task as stalled so a person can look at it.
+ *
+ * Tasks made before the board kept timestamps carry neither updatedAt nor a thread, so their
+ * conversation is found through the project's linked chats for the bot that owns the task.
  */
 export function markStaleTasks(state, options = {}) {
   const staleDays = Number.isSafeInteger(options.staleDays) && options.staleDays > 0 ? options.staleDays : STALE_TASK_DAYS;
@@ -133,9 +136,17 @@ export function markStaleTasks(state, options = {}) {
     const tasks = project.tasks.map(task => {
       if (task.status !== "open") return task;
       const stamp = Date.parse(task.updatedAt ?? task.createdAt ?? "");
-      if (!Number.isFinite(stamp)) return task;
-      const last = task.threadId ? activity(task.threadId) : undefined;
-      const touched = Math.max(stamp, Number.isFinite(last) ? last : stamp);
+      const owner = task.assigneeBotId ?? task.by ?? "";
+      const threads = task.threadId
+        ? [task.threadId]
+        : Array.isArray(project.chats) ? project.chats.filter(chat => chat.botId === owner).map(chat => chat.threadId) : [];
+      let last = undefined;
+      for (const threadId of threads) {
+        const at = activity(threadId, owner);
+        if (Number.isFinite(at) && (last === undefined || at > last)) last = at;
+      }
+      const touched = Number.isFinite(stamp) ? Math.max(stamp, last ?? stamp) : last;
+      if (touched === undefined) return task;
       if (now - touched < threshold) return task;
       staleCount += 1;
       return { ...task, stale: true, staleDays: Math.floor((now - touched) / DAY_MS), staleSince: new Date(touched).toISOString() };

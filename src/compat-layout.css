@@ -73,6 +73,13 @@ aside[data-sidebar] [data-section] span {
   font-size: 11.5px;
 }
 
+/* 3b. Persian labels in an LTR sidebar: let the text decide its own direction, so a
+   Persian-first label reads right to left and the ellipsis lands on the side the
+   reader expects. Without it the tail is cut on the wrong edge. */
+aside[data-sidebar] span.truncate {
+  unicode-bidi: plaintext;
+}
+
 /* 4. Persian text needs room, not tracking. */
 aside[data-sidebar] {
   line-height: 1.85;
@@ -118,4 +125,23 @@ aside[data-sidebar] *::-webkit-scrollbar-track {
   z-index: 2;
   backdrop-filter: blur(8px);
   background: color-mix(in srgb, var(--color-panel) 88%, transparent);
+}
+
+/* 9. A right-to-left page puts the sidebar on the right, so the pieces that hang off its
+   edges follow it there. The phone's drawer slides toward the edge it lives on: a fixed
+   -100% would push it past the viewport in a right-to-left page and leave the whole page
+   scrolling sideways. */
+@media (max-width: 767px) {
+  aside[data-sidebar].sidebar-drawer-closed {
+    translate: -100% 0;
+  }
+
+  html[dir="rtl"] aside[data-sidebar].sidebar-drawer-closed {
+    translate: 100% 0;
+  }
+}
+
+html[dir="rtl"] aside[data-sidebar] {
+  border-right-width: 0;
+  border-left: 1px solid color-mix(in srgb, var(--color-ink) 4%, transparent);
 }

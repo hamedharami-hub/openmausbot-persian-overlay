@@ -5,23 +5,24 @@ import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCompanyFeature } from "./company-feature.ts";
 import { markStaleTasks, STALE_TASK_DAYS } from "./company-layer.mjs";
+import type { CompanyBoardProject, CompanyBoardState, CompanyBoardTask } from "./company-layer.mjs";
 import type { RouteContext } from "./routes/table.ts";
 
 const DAY = 86_400_000;
 
-function openTask(overrides: Record<string, unknown> = {}) {
+function openTask(overrides: Record<string, unknown> = {}): CompanyBoardTask {
   const stamp = new Date(Date.now() - 30 * DAY).toISOString();
-  return { id: "t1", title: "کار", status: "open", percent: 0, createdAt: stamp, updatedAt: stamp, ...overrides };
+  return { id: "t1", title: "کار", status: "open", percent: 0, createdAt: stamp, updatedAt: stamp, ...overrides } as CompanyBoardTask;
 }
 
-function projectWith(tasks: unknown[]) {
+function projectWith(tasks: CompanyBoardTask[]): CompanyBoardProject {
   return { id: "p1", name: "پروژه", goal: "هدف", style: "flat", chiefBotId: "a", category: "", pinned: false, archivedAt: null, members: [], memory: [], files: [], tasks, chats: [] };
 }
 
 describe("markStaleTasks", () => {
   it("marks an open task whose conversation and record are both quiet", () => {
     const now = Date.now();
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
     const marked = markStaleTasks(state, { now, staleDays: 7, activity: () => now - 30 * DAY });
     expect(marked.projects[0].tasks[0].stale).toBe(true);
     expect(marked.projects[0].tasks[0].staleDays).toBe(30);
@@ -31,7 +32,7 @@ describe("markStaleTasks", () => {
 
   it("leaves a task alone while its conversation is active", () => {
     const now = Date.now();
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
     const marked = markStaleTasks(state, { now, staleDays: 7, activity: () => now - 60_000 });
     expect(marked.projects[0].tasks[0].stale).toBeUndefined();
     expect(marked.projects[0].staleCount).toBe(0);
@@ -40,7 +41,7 @@ describe("markStaleTasks", () => {
   it("leaves a task alone until the threshold is reached", () => {
     const now = Date.now();
     const stamp = new Date(now - 3 * DAY).toISOString();
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room", createdAt: stamp, updatedAt: stamp })])], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room", createdAt: stamp, updatedAt: stamp })])], threads: {} };
     const marked = markStaleTasks(state, { now, staleDays: 7, activity: () => now - 3 * DAY });
     expect(marked.projects[0].tasks[0].stale).toBeUndefined();
   });
@@ -48,15 +49,32 @@ describe("markStaleTasks", () => {
   it("never marks a proposed, done or rejected task", () => {
     const now = Date.now();
     const tasks = ["proposed", "done", "rejected"].map((status, index) => openTask({ id: `t${index}`, status, threadId: "room" }));
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith(tasks)], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith(tasks)], threads: {} };
     const marked = markStaleTasks(state, { now, staleDays: 1, activity: () => now - 90 * DAY });
     for (const task of marked.projects[0].tasks) expect(task.stale).toBeUndefined();
     expect(marked.projects[0].staleCount).toBe(0);
   });
 
+  it("falls back to the owner's linked conversation when a task has no timestamp", () => {
+    const now = Date.now();
+    const project = { ...projectWith([{ id: "t1", title: "کار", status: "open", percent: 0, by: "bot-a" }]), chats: [{ botId: "bot-a", threadId: "room" }] };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [project], threads: {} };
+    const marked = markStaleTasks(state, { now, staleDays: 7, activity: (_threadId: string, botId?: string) => (botId === 'bot-a' ? now - 12 * DAY : undefined) });
+    expect(marked.projects[0].tasks[0].stale).toBe(true);
+    expect(marked.projects[0].tasks[0].staleDays).toBe(12);
+  });
+
+  it("leaves a task alone when neither the task nor its owner's conversation moved", () => {
+    const now = Date.now();
+    const project = { ...projectWith([{ id: "t1", title: "کار", status: "open", percent: 0, by: "bot-a" }]), chats: [{ botId: "bot-a", threadId: "room" }] };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [project], threads: {} };
+    const marked = markStaleTasks(state, { now, staleDays: 7, activity: (_threadId: string, botId?: string) => (botId === 'bot-a' ? now - 2 * DAY : undefined) });
+    expect(marked.projects[0].tasks[0].stale).toBeUndefined();
+  });
+
   it("does not change the stored state", () => {
     const now = Date.now();
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room" })])], threads: {} };
     markStaleTasks(state, { now, staleDays: 1, activity: () => now - 90 * DAY });
     expect(state.projects[0].tasks[0].stale).toBeUndefined();
     expect(state.projects[0].tasks[0].status).toBe("open");
@@ -66,7 +84,7 @@ describe("markStaleTasks", () => {
   it("uses the default threshold when no override is given", () => {
     const now = Date.now();
     const stamp = new Date(now - (STALE_TASK_DAYS + 1) * DAY).toISOString();
-    const state = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room", createdAt: stamp, updatedAt: stamp })])], threads: {} };
+    const state: CompanyBoardState = { schemaVersion: 1, revision: 1, projects: [projectWith([openTask({ threadId: "room", createdAt: stamp, updatedAt: stamp })])], threads: {} };
     expect(markStaleTasks(state, { now, activity: () => now - (STALE_TASK_DAYS + 1) * DAY }).projects[0].tasks[0].stale).toBe(true);
   });
 });

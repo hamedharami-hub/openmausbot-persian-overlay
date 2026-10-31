@@ -6,6 +6,10 @@ export interface LanguageWords { words: readonly string[]; unspaced?: true }
 /** Security invariant: steps that press one of these (send, delete, buy, pay, post, submit, order, transfer, publish and
  * their like) are never saved, so that request always goes to the AI. */
 export const FINAL_ACTIONS: Readonly<Record<string, LanguageWords>> = {
+  fa: { words: ["ارسال", "ارسال دوباره", "حذف", "سطل زباله", "پاک کردن", "برداشتن", "دور انداختن", "خالی کردن زباله‌دان", "انتقال به زباله‌دان",
+    "ذخیره نکن", "ذخیره نکنید", "نگه ندار", "خرید", "پرداخت", "تسویه حساب", "اشتراک", "لغو اشتراک", "ثبت سفارش", "سفارش بده", "سفارشت را ثبت کن",
+    "همین حالا سفارش بده", "همین حالا رزرو کن", "رزرو کن", "رزرو", "کمک مالی", "پست کردن", "منتشر کردن", "انتشار", "توییت", "هم‌رسانی", "اشتراک گذاری",
+    "پاسخ دادن", "پاسخ", "دیدگاه", "ثبت", "تأیید", "انتقال", "برداشت", "بارگذاری", "تأیید کردن", "حذف نصب", "بازنشانی", "خاموش کردن", "راه‌اندازی دوباره"] },
   en: { words: ["send", "resend", "paperplane", "delete", "trash", "erase", "remove", "discard", "empty bin", "move to bin", "don't save", "do not save",
     "buy", "purchase", "checkout", "check out", "subscribe", "unsubscribe", "pay", "place order", "place your order", "order now", "book now", "reserve", "donate",
     "post", "publish", "tweet", "share", "reply", "comment", "submit", "confirm", "transfer", "withdraw", "upload", "approve", "uninstall", "reset", "shut down", "restart"] },
@@ -67,6 +71,8 @@ export const FINAL_ACTIONS: Readonly<Record<string, LanguageWords>> = {
 
 /** Security invariant: a field labelled with one of these holds a secret, and a step on it is never saved. */
 export const SECRET_FIELDS: Readonly<Record<string, LanguageWords>> = {
+  fa: { words: ["گذرواژه", "رمز عبور", "رمز", "پین", "کد پین", "کد امنیتی", "کد تأیید", "کد یک‌بارمصرف", "کد یکبار مصرف", "شماره کارت", "کارت بانکی",
+    "کلید api", "کلید خصوصی", "کلید بازیابی", "عبارت بازیابی", "رمز بازیابی", "کلید", "اسرار"] },
   en: { words: ["password", "passcode", "passphrase", "pin", "pin code", "security code", "verification code", "one-time code", "otp", "cvv", "cvc",
     "card number", "credit card", "api key", "secret", "private key", "recovery key", "recovery phrase", "seed phrase", "social security"] },
   de: { words: ["passwort", "kennwort", "pin-code", "geheimzahl", "sicherheitscode", "bestätigungscode", "einmalcode", "kartennummer", "kreditkarte",
