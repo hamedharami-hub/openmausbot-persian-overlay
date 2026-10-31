@@ -189,7 +189,7 @@ export function CanvasComputers({ open, createRequest, drop, sections, onClose, 
   const settings = () => { onClose(); dispatch({ type: "toggleAppSettings", open: true, section: "computer" }); };
 
   return <>
-    {open && <aside ref={shelf} aria-label={t("canvasComputers.title")} onKeyDown={(event) => { if (event.key === "Escape" && !assignment) { event.stopPropagation(); if (pointer.current) clearDrag(); else onClose(); } }} className="flex w-[300px] max-w-[90vw] shrink-0 flex-col border-l border-hairline/50 bg-panel max-sm:absolute max-sm:inset-y-0 max-sm:right-0 max-sm:z-30 max-sm:shadow-xl">
+    {open && <aside ref={shelf} aria-label={t("canvasComputers.title")} onKeyDown={(event) => { if (event.key === "Escape" && !assignment) { event.stopPropagation(); if (pointer.current) clearDrag(); else onClose(); } }} className="flex w-[300px] max-w-[90vw] shrink-0 flex-col border-s border-hairline/50 bg-panel max-sm:absolute max-sm:inset-y-0 max-sm:end-0 max-sm:z-30 max-sm:shadow-xl">
       <header className="flex items-center gap-2 border-b border-hairline/40 px-4 py-3">
         <Monitor size={16} className="text-ink-secondary" /><h2 className="flex-1 text-[13px] font-semibold">{t("canvasComputers.title")}</h2>
         <button aria-label={t("canvasComputers.refresh")} className={control} disabled={loading || busy !== null} onClick={() => { setError(""); void refresh(); }}><RefreshCw size={14} className={loading ? "animate-spin" : ""} /></button>

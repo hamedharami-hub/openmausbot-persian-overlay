@@ -653,7 +653,7 @@ export function StreamSurface(props: {
           defaultValue={INPUT_SENTINEL}
           // The caret must sit after the sentinel for a deletion to have something to delete.
           onFocus={(event) => resetInput(event.currentTarget)}
-          className="sr-only left-0 top-0 text-base"
+          className="sr-only start-0 top-0 text-base"
           onKeyDown={(event) => handleKey("down", event)}
           onKeyUp={(event) => handleKey("up", event)}
           onInput={handleInput}
@@ -763,7 +763,7 @@ export function StreamSurface(props: {
       {hostSetup ? (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-card p-4 text-center">
           <p role="alert" className="max-w-sm text-[13px] text-ink-secondary">{previewStreamHostSetupMessage(hostSetup)}</p>
-          <code className="max-w-md select-all break-all rounded-lg bg-inset px-3 py-2 text-left text-[12px] text-ink">{hostSetup.command}</code>
+          <code className="max-w-md select-all break-all rounded-lg bg-inset px-3 py-2 text-start text-[12px] text-ink">{hostSetup.command}</code>
           <button type="button" className="rounded-lg border border-hairline px-3 py-1.5 text-[12px] text-ink hover:bg-inset" onClick={() => setHostSetup(null)}>Try again</button>
         </div>
       ) : null}

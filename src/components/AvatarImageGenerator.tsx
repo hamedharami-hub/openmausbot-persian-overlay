@@ -206,7 +206,7 @@ export function AvatarImageGenerator({
       )}
       <div className="flex items-center justify-end gap-2">
         {keyConfigured && (
-          <button type="button" onClick={() => void removeKey()} disabled={busy} className="mr-auto rounded-md py-1.5 text-[12px] text-ink-secondary hover:text-danger disabled:opacity-50">
+          <button type="button" onClick={() => void removeKey()} disabled={busy} className="me-auto rounded-md py-1.5 text-[12px] text-ink-secondary hover:text-danger disabled:opacity-50">
             {t("botIdentity.ai.removeKey")}
           </button>
         )}

@@ -674,7 +674,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
               }}
               disabled={saving}
               className={cn(
-                "flex min-h-[72px] w-full cursor-pointer flex-col items-start justify-between rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
+                "flex min-h-[72px] w-full cursor-pointer flex-col items-start justify-between rounded-2xl border px-3 py-3 text-start transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
                 behavior === "auto"
                   ? "border-accent bg-accent/10 text-ink ring-1 ring-accent/30"
                   : "border-hairline/50 bg-inset text-ink-secondary hover:border-hairline hover:bg-raised",
@@ -691,7 +691,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                 </span>
                 {jevOn ? t("room.responder.autoOption") : t("room.responder.autoOptionOff")}
               </span>
-              <span className="ml-6 mt-2 text-[12px] text-ink-secondary">
+              <span className="ms-6 mt-2 text-[12px] text-ink-secondary">
                 {jevOn ? t("room.setup.autoDetail") : t("room.setup.autoDetailOff")}
               </span>
             </button>
@@ -709,7 +709,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                 }}
                 disabled={saving}
                 className={cn(
-                  "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
+                  "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-start transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
                   behavior === "lead"
                     ? "border-accent bg-accent/10 text-ink ring-1 ring-accent/30"
                     : "border-hairline/50 bg-inset text-ink-secondary hover:border-hairline hover:bg-raised",
@@ -733,7 +733,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                     className={cn("shrink-0 text-ink-secondary transition-transform", leadPickerOpen && "rotate-180")}
                   />
                 </span>
-                <span className="ml-6 mt-2 truncate text-[12px] text-ink-secondary">
+                <span className="ms-6 mt-2 truncate text-[12px] text-ink-secondary">
                   {selectedLead?.name ?? t("room.behavior.chooseTeammate")}
                 </span>
               </button>
@@ -741,7 +741,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                 <div
                   role="listbox"
                   aria-label={t("room.behavior.chooseLead")}
-                  className={cn("absolute left-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-2xl border border-hairline/60 bg-panel shadow-2xl shadow-black/20", leadMotion.className)} {...leadMotion.exitProps}
+                  className={cn("absolute start-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-2xl border border-hairline/60 bg-panel shadow-2xl shadow-black/20", leadMotion.className)} {...leadMotion.exitProps}
                 >
                   <div className="border-b border-hairline/40 px-3 py-2.5">
                     <div className="text-[13px] font-semibold text-ink">{t("room.behavior.chooseLead")}</div>
@@ -761,7 +761,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                             setLeadPickerOpen(false);
                           }}
                           className={cn(
-                            "flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition",
+                            "flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start transition",
                             selected ? "bg-accent/10" : "hover:bg-raised",
                           )}
                         >
@@ -794,7 +794,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
               }}
               disabled={saving}
               className={cn(
-                "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
+                "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-start transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
                 behavior === "everyone"
                   ? "border-accent bg-accent/10 text-ink ring-1 ring-accent/30"
                   : "border-hairline/50 bg-inset text-ink-secondary hover:border-hairline hover:bg-raised",
@@ -811,7 +811,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                 </span>
                 {t("room.responder.everyoneOption")}
               </span>
-              <span className="ml-6 mt-2 text-[12px] text-ink-secondary">{t("room.setup.allMembers")}</span>
+              <span className="ms-6 mt-2 text-[12px] text-ink-secondary">{t("room.setup.allMembers")}</span>
             </button>
 
             <button
@@ -824,7 +824,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
               }}
               disabled={saving}
               className={cn(
-                "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
+                "flex min-h-[72px] w-full flex-col items-start justify-between rounded-2xl border px-3 py-3 text-start transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-50",
                 behavior === "mentions"
                   ? "border-accent bg-accent/10 text-ink ring-1 ring-accent/30"
                   : "border-hairline/50 bg-inset text-ink-secondary hover:border-hairline hover:bg-raised",
@@ -841,7 +841,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
                 </span>
                 {t("room.responder.mentionsOption")}
               </span>
-              <span className="ml-6 mt-2 text-[12px] text-ink-secondary">{t("room.setup.onlyMentioned")}</span>
+              <span className="ms-6 mt-2 text-[12px] text-ink-secondary">{t("room.setup.onlyMentioned")}</span>
             </button>
           </div>
         </fieldset>
@@ -864,7 +864,7 @@ function RoomSetup({ group, members }: { group: Group; members: Bot[] }) {
             type="button"
             onClick={() => void finish("skip")}
             disabled={saving}
-            className="rounded-xl px-3 py-2 text-left text-[13px] text-ink-secondary hover:bg-raised hover:text-ink disabled:opacity-50"
+            className="rounded-xl px-3 py-2 text-start text-[13px] text-ink-secondary hover:bg-raised hover:text-ink disabled:opacity-50"
           >
             {t("room.setup.skip")}
           </button>
@@ -1068,7 +1068,7 @@ export function GroupView({ group }: { group: Group }) {
               <Pin size={12} className="shrink-0 text-accent" />
               <button
                 onClick={() => dispatch({ type: "focusMessage", threadId: group.threadId, messageId: pinned.id })}
-                className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                className="flex min-w-0 flex-1 items-baseline gap-2 text-start"
                 title={t("chat.pinnedJump")}
               >
                 <span className="shrink-0 text-[12px] font-medium text-accent">{sender}</span>
@@ -1179,7 +1179,7 @@ export function GroupView({ group }: { group: Group }) {
           )}
           <RoomQueueList group={group} members={members} />
           {threadSpeaker && !group.dm && members.length > 1 && !group.holds?.[threadSpeaker.id] && (
-            <div className="flex justify-start pl-12">
+            <div className="flex justify-start ps-12">
               <button
                 type="button"
                 data-testid="room-stop-member"

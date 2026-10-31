@@ -50,7 +50,7 @@ function ScreenUnavailable() {
     <div
       role="alert"
       data-screen-unavailable
-      className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-danger/30 bg-card px-3.5 py-2.5 text-[13px] text-danger shadow-xl"
+      className="fixed bottom-4 start-1/2 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-danger/30 bg-card px-3.5 py-2.5 text-[13px] text-danger shadow-xl"
     >
       <span>{t("screenLoad.failed")}</span>
       <button

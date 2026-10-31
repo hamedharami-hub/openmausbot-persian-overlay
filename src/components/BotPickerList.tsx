@@ -24,7 +24,7 @@ export function BotPickerList({
           role="checkbox"
           aria-label={b.name}
           aria-checked={picked.has(b.id)}
-          className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-raised/50"
+          className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-start hover:bg-raised/50"
         >
           <BotAvatar bot={b} state="happy" size={28} animated={false} />
           <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{b.name}</span>

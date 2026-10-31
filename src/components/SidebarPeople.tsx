@@ -65,12 +65,12 @@ export function SidebarPeople({ compact }: { compact: boolean }) {
           return (
             <li key={person.email}>
               <button type="button" onClick={() => open(person)} aria-label={label} title={label} data-person={person.email}
-                className={cn("relative flex w-full min-w-0 items-center gap-2 rounded-lg text-left text-[13px] text-ink hover:bg-raised/60", compact ? "p-1" : "px-2 py-1")}>
+                className={cn("relative flex w-full min-w-0 items-center gap-2 rounded-lg text-start text-[13px] text-ink hover:bg-raised/60", compact ? "p-1" : "px-2 py-1")}>
                 <PersonFace person={person} size={compact ? 22 : 18} />
                 {!compact && <span className="min-w-0 flex-1 truncate">{person.you ? t("sidebar.people.you", { name: person.name }) : person.name}</span>}
                 {person.you && waiting > 0 && (
                   <span aria-hidden="true" data-inbox-waiting={waiting}
-                    className={cn("rounded-full bg-warning px-1.5 text-[11px] font-semibold tabular-nums text-panel", compact && "absolute -right-0.5 -top-0.5 px-1 text-[10px]")}>{waiting}</span>
+                    className={cn("rounded-full bg-warning px-1.5 text-[11px] font-semibold tabular-nums text-panel", compact && "absolute -end-0.5 -top-0.5 px-1 text-[10px]")}>{waiting}</span>
                 )}
               </button>
             </li>

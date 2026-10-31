@@ -65,10 +65,10 @@ export function SidebarEdgeToggle({ collapsed, onToggle, style, anchorRef, shown
       onPointerEnter={() => onHover?.(true)}
       onPointerLeave={() => onHover?.(false)}
       className={cn(
-        pinned ? "fixed" : "absolute -right-[14px]",
+        pinned ? "fixed" : "absolute -end-[14px]",
         shown ? "opacity-100" : "pointer-events-none opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 touch:pointer-events-auto touch:opacity-100",
         "transition-opacity duration-150",
-        "top-[14px] z-30 hidden h-8 w-[14px] items-center justify-center rounded-r-[4px] border border-l-0 border-hairline/50 bg-panel text-ink-tertiary shadow-[1px_0_2px_rgb(0_0_0/0.06)] hover:bg-raised hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:flex",
+        "top-[14px] z-30 hidden h-8 w-[14px] items-center justify-center rounded-eundefined border border-sundefined border-hairline/50 bg-panel text-ink-tertiary shadow-[1px_0_2px_rgb(0_0_0/0.06)] hover:bg-raised hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus md:flex",
       )}
     >
       <Arrow size={12} strokeWidth={2.25} aria-hidden="true" />
@@ -97,7 +97,7 @@ export function SidebarSearchToggle({ open, onToggle, ref }: { open: boolean; on
 export function SidebarSearchPill({ query, onQuery, onClose }: { query: string; onQuery: (query: string) => void; onClose: () => void }) {
   return (
     <div data-sidebar-search-pill className="px-3 pb-2 pt-0.5">
-      <div className={cn("flex h-[34px] items-center gap-2 rounded-full pl-3 pr-1.5 text-ink-secondary focus-within:ring-focus", ELEVATED_CONTROL)}>
+      <div className={cn("flex h-[34px] items-center gap-2 rounded-full ps-3 pe-1.5 text-ink-secondary focus-within:ring-focus", ELEVATED_CONTROL)}>
         <Search size={15} aria-hidden="true" className="shrink-0" />
         <input
           autoFocus

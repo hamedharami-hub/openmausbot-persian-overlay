@@ -37,7 +37,7 @@ export function WindowCaptionButtons({ visible }: { visible: boolean }) {
       aria-hidden
       style={noDrag}
       // z-40: above docked panels (z-20/z-40, earlier in the DOM); centre-screen modals (z-50) still paint over.
-      className="absolute right-0 top-0 z-40 flex items-stretch"
+      className="absolute end-0 top-0 z-40 flex items-stretch"
     >
       <button
         type="button"

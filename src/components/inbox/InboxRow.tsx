@@ -32,10 +32,10 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
   const actions = quickActions(row);
   return (
     <div data-inbox-row={row.id} data-tab={row.tab} data-unread={row.unread ? "" : undefined}
-      className={cn("group relative flex min-w-0 items-center gap-2 border-b border-hairline/20 pr-1.5 focus-within:bg-raised/70 hover:bg-raised/70",
+      className={cn("group relative flex min-w-0 items-center gap-2 border-b border-hairline/20 pe-1.5 focus-within:bg-raised/70 hover:bg-raised/70",
         row.unread ? "bg-raised/45" : "bg-transparent", inCard && "border-b-0")}>
       <button type="button" onClick={() => onOpen(row)} title={`${row.from.name} · ${subject}`}
-        className={cn("flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
+        className={cn("flex min-w-0 flex-1 items-center gap-2 py-1.5 ps-2.5 text-start text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60",
           row.unread ? "font-semibold text-ink" : "font-normal text-ink-secondary")}>
         <span className="shrink-0" aria-hidden="true"><InboxSender from={row.from} size={20} /></span>
         <span className={cn("shrink-0 truncate", inCard ? "w-[7.5rem]" : "w-[5.5rem] sm:w-[6.5rem]")}>{row.from.name}</span>
@@ -45,7 +45,7 @@ export function InboxRowItem({ row, now, onOpen, onAction, inCard = false }: {
         </span>
         <span className="shrink-0 text-[11px] font-normal tabular-nums text-ink-tertiary group-focus-within:invisible group-hover:invisible">{threadUpdatedLabel(row.at, now)}</span>
       </button>
-      <span className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-raised group-focus-within:flex group-hover:flex">
+      <span className="absolute end-1.5 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md bg-raised group-focus-within:flex group-hover:flex">
         {actions.map((action) => {
           const { Icon, label } = ACTION_LOOK[action];
           return (

@@ -437,7 +437,7 @@ export function VoiceSettings({
             <option value="gemini-3.8-flash-lite-tts">Gemini 3.8 Flash-Lite · fast, efficient</option>
             <option value="gemini-3.8-flash-tts">Gemini 3.8 Flash · richer voice</option>
           </Select>
-          <p className="text-[11.5px] leading-relaxed text-ink-secondary">{t("voice.gemini.freePrivacy")}</p>
+          <p className="text-[11px] leading-relaxed text-ink-secondary">{t("voice.gemini.freePrivacy")}</p>
         </div>
       )}
 

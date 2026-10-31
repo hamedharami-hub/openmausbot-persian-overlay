@@ -87,8 +87,8 @@ export const ChromeRow = forwardRef<HTMLInputElement, {
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist" aria-label="Browser tabs">
           {tabs.length ? tabs.map((tab) => (
             <div key={tab.tabId} className={`flex max-w-52 shrink-0 items-center gap-1 rounded-xl px-1 text-[12px] ${tab.active ? "bg-inset text-ink" : "text-ink-secondary"}`}>
-              <Globe size={13} className="ml-1.5 shrink-0 opacity-60" aria-hidden="true" />
-              <button role="tab" aria-selected={tab.active} className="truncate px-1 py-1.5 text-left disabled:cursor-default" disabled={!commandsReady} onClick={() => props.onCommand({ type: "tabSelect", tabId: tab.tabId })} title={tab.title || tab.url}>{tab.title || "New tab"}</button>
+              <Globe size={13} className="ms-1.5 shrink-0 opacity-60" aria-hidden="true" />
+              <button role="tab" aria-selected={tab.active} className="truncate px-1 py-1.5 text-start disabled:cursor-default" disabled={!commandsReady} onClick={() => props.onCommand({ type: "tabSelect", tabId: tab.tabId })} title={tab.title || tab.url}>{tab.title || "New tab"}</button>
               <button className={button} aria-label={`Close ${tab.title || "tab"}`} disabled={!commandsReady} onClick={() => props.onCommand({ type: "tabClose", tabId: tab.tabId })}><X size={13} /></button>
             </div>
           )) : <div className="flex items-center gap-2 rounded-xl bg-inset px-3 py-1.5 text-[12px] text-ink-secondary"><Globe size={13} aria-hidden="true" />New tab</div>}
@@ -148,10 +148,10 @@ export const ChromeRow = forwardRef<HTMLInputElement, {
           }}
           placeholder={connected ? "Search or enter address" : "Connecting…"}
           spellCheck={false}
-          className="mx-1 min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-center text-[12px] outline-none placeholder:text-ink-secondary focus:bg-inset focus:text-left"
+          className="mx-1 min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-center text-[12px] outline-none placeholder:text-ink-secondary focus:bg-inset focus:text-start"
         />
         {props.menu}
-        <div aria-hidden="true" data-loading={nav.loading} className={`pointer-events-none absolute bottom-0 left-0 h-0.5 bg-accent transition-[width,opacity] duration-500 ${nav.loading ? "w-2/3 opacity-100" : "w-full opacity-0"}`} />
+        <div aria-hidden="true" data-loading={nav.loading} className={`pointer-events-none absolute bottom-0 start-0 h-0.5 bg-accent transition-[width,opacity] duration-500 ${nav.loading ? "w-2/3 opacity-100" : "w-full opacity-0"}`} />
       </form>
     </div>
   );

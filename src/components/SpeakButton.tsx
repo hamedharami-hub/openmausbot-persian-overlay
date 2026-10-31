@@ -102,7 +102,7 @@ export function SpeakButton({ className, ...args }: SpeakArgs & { className?: st
       {downloadable && <button type="button" onClick={() => void download()} disabled={downloading} aria-label={t("chat.speak.download")} title={t("chat.speak.download")} className="rounded-md p-1.5 text-ink-secondary hover:bg-raised hover:text-ink disabled:opacity-50">
         {downloading ? <Loader2 {...ACTION_ICON} className="animate-spin" /> : <Download {...ACTION_ICON} />}
       </button>}
-      {downloadError && <span role="status" className="ml-1 max-w-48 truncate text-[10px] text-danger">{downloadError}</span>}
+      {downloadError && <span role="status" className="ms-1 max-w-48 truncate text-[10px] text-danger">{downloadError}</span>}
     </span>
   );
 }

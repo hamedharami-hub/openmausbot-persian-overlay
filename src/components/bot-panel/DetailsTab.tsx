@@ -25,7 +25,7 @@ function ItemRow({ item }: { item: SidebarMenuItem }) {
       disabled={item.disabled}
       aria-pressed={item.active || undefined}
       onClick={item.onSelect}
-      className={cn(rowCls, "w-full text-left enabled:hover:bg-ink/[0.03] disabled:cursor-default disabled:opacity-45")}
+      className={cn(rowCls, "w-full text-start enabled:hover:bg-ink/[0.03] disabled:cursor-default disabled:opacity-45")}
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/[0.05] text-ink-secondary [&_svg]:size-[15px]" aria-hidden="true">
         {item.icon}

@@ -85,7 +85,7 @@ export function SidebarResizeHandle({ sizing, sidebarRef, style }: {
       aria-valuenow={sizing.valueNow}
       tabIndex={0}
       data-sidebar-resize
-      className="absolute inset-y-0 -right-1 z-20 hidden w-2 cursor-col-resize touch-none hover:bg-accent/20 focus-visible:bg-accent/30 md:block"
+      className="absolute inset-y-0 -end-1 z-20 hidden w-2 cursor-col-resize touch-none hover:bg-accent/20 focus-visible:bg-accent/30 md:block"
       style={style}
       onPointerDown={(event) => {
         if (event.button !== 0) return;

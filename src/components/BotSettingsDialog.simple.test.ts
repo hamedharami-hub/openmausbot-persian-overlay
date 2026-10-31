@@ -652,7 +652,7 @@ describe("the Bot settings page", () => {
     expect(order.every((index) => index > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(switches(rendered.html)).toBe(0);
-    expect(rendered.html.match(/pl-\[38px\]/g)).toHaveLength(2);
+    expect(rendered.html.match(/ps-\[38px\]/g)).toHaveLength(2);
   });
 
   it("shows the first line of the instructions, or how to start, and edits them in place with Done", () => {

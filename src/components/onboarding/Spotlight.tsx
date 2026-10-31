@@ -179,7 +179,7 @@ export function Spotlight({
       {/* Outer layer positions (transition), inner layer enters (keyframes): the two never fight over transform. */}
       <div
         data-tour-card
-        className="pointer-events-auto absolute left-0 top-0 w-[320px] transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        className="pointer-events-auto absolute start-0 top-0 w-[320px] transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
         style={{ transform, width: cardWidth }}
       >
         <div
@@ -231,7 +231,7 @@ export function Spotlight({
                 <button
                   type="button"
                   onClick={secondary.onClick}
-                  className="ml-auto text-[12px] text-ink-secondary transition-colors hover:text-ink"
+                  className="ms-auto text-[12px] text-ink-secondary transition-colors hover:text-ink"
                 >
                   {secondary.label}
                 </button>

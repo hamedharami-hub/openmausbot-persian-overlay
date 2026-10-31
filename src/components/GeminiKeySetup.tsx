@@ -29,8 +29,8 @@ export function GeminiKeySetup({ onSaved, compact = false }: { onSaved?: () => v
   };
 
   return (
-    <form onSubmit={(event) => void save(event)} className={`flex flex-col gap-2.5 rounded-xl border border-hairline bg-panel text-left ${compact ? "p-3" : "p-4"}`}>
-      <div className="text-[13.5px] font-medium text-ink">{t("voice.gemini.keyTitle")}</div>
+    <form onSubmit={(event) => void save(event)} className={`flex flex-col gap-2.5 rounded-xl border border-hairline bg-panel text-start ${compact ? "p-3" : "p-4"}`}>
+      <div className="text-[13px] font-medium text-ink">{t("voice.gemini.keyTitle")}</div>
       <input
         type="password"
         autoComplete="off"

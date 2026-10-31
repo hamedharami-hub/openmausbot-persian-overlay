@@ -230,7 +230,7 @@ function BotDataPanel({ bot, requestedCard }: { bot: Bot; requestedCard?: { id: 
           <summary role="button" className={`${control} cursor-pointer list-none [&::-webkit-details-marker]:hidden`} aria-label={t("data.history")} title={t("data.history")}>
             <History size={14} aria-hidden="true" /><span className="hidden @min-[460px]/data:inline">{t("data.history")}</span><ChevronDown size={12} aria-hidden="true" />
           </summary>
-          <div className="absolute right-0 bottom-full z-30 mb-1 flex max-h-[min(20rem,calc(100cqh-3rem))] w-72 max-w-[70vw] flex-col overflow-y-auto rounded-xl border border-hairline/50 bg-menu p-1.5 shadow-xl" role="menu" aria-label={t("data.history")}>
+          <div className="absolute end-0 bottom-full z-30 mb-1 flex max-h-[min(20rem,calc(100cqh-3rem))] w-72 max-w-[70vw] flex-col overflow-y-auto rounded-xl border border-hairline/50 bg-menu p-1.5 shadow-xl" role="menu" aria-label={t("data.history")}>
             <button type="button" role="menuitemradio" aria-checked={selection === null} className={`${control} text-left`} onClick={(event) => { select(null); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{t("data.latest")}</button>
             {cards.map((candidate) => (
               <button key={candidate.id} type="button" role="menuitemradio" aria-checked={selection !== null && card?.id === candidate.id} className={`${control} text-left`}

@@ -113,7 +113,7 @@ export function PairPage({ initialCode, initialEmail = null, reason }: { initial
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-app px-6 text-ink">
-      <div className="absolute left-3 top-12 max-w-[280px]"><DesktopWorkspaceSwitcher /></div>
+      <div className="absolute start-3 top-12 max-w-[280px]"><DesktopWorkspaceSwitcher /></div>
       <div className="w-full max-w-[420px]">
         {opening ? (
           <p role="status" className="text-[20px] font-semibold">{cloudHome ? "Opening the Cloud…" : `Connecting to ${environment?.label ?? `this ${productName()}`}…`}</p>

@@ -58,7 +58,7 @@ export function InboxReading({ view, row, now }: { view: InboxView; row: InboxRo
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{row.from.name}</span>
-            <span className="ml-auto shrink-0 text-[11px] tabular-nums text-ink-tertiary">{threadUpdatedLabel(row.at, now)}</span>
+            <span className="ms-auto shrink-0 text-[11px] tabular-nums text-ink-tertiary">{threadUpdatedLabel(row.at, now)}</span>
           </div>
           <div className="truncate text-[13px] text-ink">{subjectOf(row)}</div>
           {(row.origin || row.via) && (

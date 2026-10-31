@@ -33,7 +33,7 @@ function storeCollapsed(collapsed: boolean) {
   try { globalThis.localStorage?.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"); } catch {}
 }
 
-const CARD = "fixed bottom-4 left-4 z-40 max-h-[calc(100dvh-32px)] w-[300px] max-w-[calc(100vw-32px)] origin-bottom-left overflow-y-auto rounded-2xl border border-hairline/50 bg-menu text-ink shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55),0_4px_12px_-6px_rgba(0,0,0,0.3)]";
+const CARD = "fixed bottom-4 start-4 z-40 max-h-[calc(100dvh-32px)] w-[300px] max-w-[calc(100vw-32px)] origin-bottom-left overflow-y-auto rounded-2xl border border-hairline/50 bg-menu text-ink shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55),0_4px_12px_-6px_rgba(0,0,0,0.3)]";
 const PRIMARY = "ui-button ui-button-primary shrink-0 gap-1.5 text-[13px] transition-transform duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none";
 
 function nextRunLabel(at: number | null, now = Date.now()): string | null {
@@ -186,7 +186,7 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
     </span>;
     return <li key={item.id} data-cloud-setup-step={item.id} data-status={item.status} className="animate-rise" style={staggerIndex(index)}>
       {pending
-        ? <button type="button" onClick={() => setChosen(item.id)} className="-mx-2 flex w-[calc(100%+16px)] items-start gap-2.5 rounded-lg px-2 py-1.5 text-left text-ink transition-colors hover:bg-raised/70">{mark(item)}{title}</button>
+        ? <button type="button" onClick={() => setChosen(item.id)} className="-mx-2 flex w-[calc(100%+16px)] items-start gap-2.5 rounded-lg px-2 py-1.5 text-start text-ink transition-colors hover:bg-raised/70">{mark(item)}{title}</button>
         : <div className="-mx-2 flex items-start gap-2.5 px-2 py-1.5 text-ink-secondary">{mark(item)}{title}</div>}
     </li>;
   };
@@ -216,7 +216,7 @@ export function CloudSetup({ viewer, welcomeShown = false }: { viewer: WelcomeVi
       <h2 id="cloud-setup-title" className="min-w-0 flex-1 truncate text-[13px] font-semibold">{t("cloudSetup.title")}</h2>
       <span aria-hidden="true" className="shrink-0 text-[12px] tabular-nums text-ink-secondary">{progress}</span>
       <button type="button" aria-label={t(collapsed ? "cloudSetup.expand" : "cloudSetup.collapse")} aria-expanded={!collapsed} aria-controls="cloud-setup-body" onClick={toggle}
-        className={cn("ui-icon-button -mr-1.5 size-6 min-h-0 shrink-0 p-0", collapsed && "after:absolute after:inset-0 after:content-['']")}>
+        className={cn("ui-icon-button -me-1.5 size-6 min-h-0 shrink-0 p-0", collapsed && "after:absolute after:inset-0 after:content-['']")}>
         <ChevronDown size={14} aria-hidden="true" className={cn("transition-transform duration-200 ease-out", collapsed && "rotate-180")} />
       </button>
     </div>

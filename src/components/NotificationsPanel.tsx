@@ -68,7 +68,7 @@ export function NotificationRail() {
   const unread = state.notifications.reduce((count, n) => count + (n.read ? 0 : 1), 0);
   if (state.notificationsOpen) return null;
   return (
-    <aside aria-label={t("notifications.title")} className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-l-lg border border-r-0 border-hairline/40 bg-panel p-1 shadow-sm">
+    <aside aria-label={t("notifications.title")} className="absolute end-0 top-1/2 z-20 -translate-y-1/2 rounded-sundefined border border-eundefined border-hairline/40 bg-panel p-1 shadow-sm">
       <button
         type="button"
         onClick={() => dispatch({ type: "toggleNotifications" })}
@@ -79,7 +79,7 @@ export function NotificationRail() {
       >
         <Bell size={17} />
         {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-ink">
+          <span className="absolute -end-0.5 -top-0.5 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-ink">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
@@ -134,12 +134,12 @@ export function NotificationsPanel() {
   return (
     <aside
       aria-label={t("notifications.title")}
-      className="animate-panel-in flex h-full w-[300px] max-w-full shrink-0 flex-col border-l border-hairline/40 bg-panel max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30"
+      className="animate-panel-in flex h-full w-[300px] max-w-full shrink-0 flex-col border-s border-hairline/40 bg-panel max-md:absolute max-md:inset-y-0 max-md:end-0 max-md:z-30"
     >
       <div className="flex items-center gap-1.5 border-b border-hairline/40 px-3.5 py-2.5">
         <span className="flex-1 text-[13px] font-medium text-ink">
           {t("notifications.title")}
-          {unreadCount > 0 && <span className="ml-1.5 text-[12px] font-normal text-accent">· {t("notifications.unread", { count: unreadCount })}</span>}
+          {unreadCount > 0 && <span className="ms-1.5 text-[12px] font-normal text-accent">· {t("notifications.unread", { count: unreadCount })}</span>}
         </span>
         <button type="button" onClick={markAllRead} className="shrink-0 whitespace-nowrap text-[12px] text-accent hover:underline">
           {t("notifications.markAllRead")}
@@ -202,7 +202,7 @@ function NotificationRow({ entry, now, bot, threadName, onOpen }: { entry: Notif
       onClick={onOpen}
       title={entry.title}
       className={cn(
-        "flex w-full gap-2.5 border-b border-hairline/20 px-3.5 py-2.5 text-left hover:bg-raised/60",
+        "flex w-full gap-2.5 border-b border-hairline/20 px-3.5 py-2.5 text-start hover:bg-raised/60",
         !entry.read && "bg-accent/5",
       )}
     >

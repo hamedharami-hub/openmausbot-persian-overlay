@@ -83,7 +83,7 @@ export function InboxPanel() {
   }
   return (
     <aside aria-label={t("inbox.panel.title")} data-inbox-panel="side" onKeyDown={onKeyDown}
-      className="animate-panel-in motion-reduce:animate-none flex h-full w-[380px] max-w-full shrink-0 flex-col border-l border-hairline/40 bg-panel max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30">
+      className="animate-panel-in motion-reduce:animate-none flex h-full w-[380px] max-w-full shrink-0 flex-col border-s border-hairline/40 bg-panel max-md:absolute max-md:inset-y-0 max-md:end-0 max-md:z-30">
       {body}
     </aside>
   );

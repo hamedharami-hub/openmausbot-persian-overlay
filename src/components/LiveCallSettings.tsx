@@ -78,7 +78,7 @@ export function LiveCallSettings({ onClose }: { onClose: () => void }) {
           <option value="gemini">{t("call.live.provider.gemini")}</option>
         </Select>
       </label>
-      {provider === "gemini" && <div className="-mt-2 text-[11.5px] text-ink-tertiary">{t("call.live.gemini.sessionLimit")}</div>}
+      {provider === "gemini" && <div className="-mt-2 text-[11px] text-ink-tertiary">{t("call.live.gemini.sessionLimit")}</div>}
       <label className="flex items-center justify-between gap-2">
         <span className="text-ink-secondary">{t("call.live.voice")}</span>
         <Select

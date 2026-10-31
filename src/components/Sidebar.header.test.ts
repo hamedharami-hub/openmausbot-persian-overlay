@@ -124,7 +124,7 @@ describe("sidebar top row", () => {
     expect(buttons).toBeGreaterThan(switcher);
     expect(row.slice(buttons).match(/<button/g)).toHaveLength(3);
     const rowClasses = classesOf(row, "data-sidebar-top-row");
-    expect(rowClasses).toEqual(expect.arrayContaining(["relative", "pl-4", "pr-2"]));
+    expect(rowClasses).toEqual(expect.arrayContaining(["relative", "ps-4", "pe-2"]));
     expect(rowClasses).not.toContain("px-4");
     expect(classesOf(row, "data-traffic-light-space")).toEqual(expect.arrayContaining(["w-[72px]", "shrink-0"]));
     expect(classesOf(row, "data-sidebar-top-slot")).toEqual(expect.arrayContaining(["@container/sidebar-top", "min-w-0", "flex-1"]));
@@ -150,7 +150,7 @@ describe("sidebar top row", () => {
     const html = render();
     const row = topRow(html);
     expect(row).toMatch(/^data-sidebar-top-row="true" class="[^"]*\bh-\[60px\][^"]*\bitems-start\b[^"]*" style="-webkit-app-region:drag"/);
-    expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["pl-4", "pr-4", "pt-3"]));
+    expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["ps-4", "pe-4", "pt-3"]));
     expect(row).not.toContain("data-workspace-switcher");
     expect(html).not.toContain("Switch server:");
     const { lights, slot, buttons } = order(row);
@@ -176,7 +176,7 @@ describe("sidebar top row", () => {
       const row = topRow(html);
       expect(row).not.toContain("data-traffic-light-space");
       expect(row).not.toContain("bg-[#ff5f57]");
-      expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-12", "pl-4", "pr-2"]));
+      expect(classesOf(row, "data-sidebar-top-row")).toEqual(expect.arrayContaining(["relative", "h-12", "ps-4", "pe-2"]));
       const { slot, spacer, switcher, buttons } = order(row);
       expect(slot).toBeGreaterThan(-1);
       expect(spacer).toBeGreaterThan(slot);
@@ -188,7 +188,7 @@ describe("sidebar top row", () => {
 
   it("keeps the browser build's placeholder lights 12px clear of the drag space and buttons", () => {
     const row = topRow(render());
-    expect(row).toContain('<div class="flex shrink-0 items-center gap-2 mr-3"><span class="size-3 rounded-full bg-[#ff5f57]"></span>');
+    expect(row).toContain('<div class="flex shrink-0 items-center gap-2 me-3"><span class="size-3 rounded-full bg-[#ff5f57]"></span>');
     const { spacer, buttons } = order(row);
     expect(spacer).toBeGreaterThan(row.indexOf("bg-[#28c840]"));
     expect(buttons).toBeGreaterThan(spacer);

@@ -57,7 +57,7 @@ export function GrokFinishSetup({ notes, imported, onDone, className = "min-h-0 
         <Check size={17} className="text-success" />
         {t("grokFinish.added", { name: imported.name })}
       </div>
-      <ul className="mt-3 list-disc pl-5 text-[13px] leading-relaxed text-ink-secondary">
+      <ul className="mt-3 list-disc ps-5 text-[13px] leading-relaxed text-ink-secondary">
         {notes.apps.length > 0 && <li>{t("grokFinish.apps", { apps: notes.apps.map((app) => app.label).join(", ") })}</li>}
         {notes.unmatched.length > 0 && <li>{t("grokFinish.unmatched", { tools: notes.unmatched.join(", ") })}</li>}
         {routines > 0 && <li>{t("grokFinish.routines", { count: routines })}</li>}

@@ -60,7 +60,7 @@ function ProgressRing({ value = 0, waiting = false }: { value?: number; waiting?
   const box = CIRCLE + 8, radius = box / 2 - 1.5, around = 2 * Math.PI * radius;
   const shown = waiting ? 0.28 : Math.max(0.06, Math.min(1, value));
   return <svg aria-hidden="true" data-rail-ring={waiting ? "waiting" : Math.round(value * 100)} width={box} height={box} viewBox={`0 0 ${box} ${box}`}
-    className={cn("pointer-events-none absolute -left-1 -top-1 -rotate-90", waiting && "animate-spin [animation-duration:2.4s] motion-reduce:animate-none")}>
+    className={cn("pointer-events-none absolute -start-1 -top-1 -rotate-90", waiting && "animate-spin [animation-duration:2.4s] motion-reduce:animate-none")}>
     <circle cx={box / 2} cy={box / 2} r={radius} fill="none" stroke="var(--color-hairline)" strokeWidth={2} />
     <circle cx={box / 2} cy={box / 2} r={radius} fill="none" stroke="var(--color-accent)" strokeWidth={2} strokeLinecap="round" strokeDasharray={`${shown * around} ${around}`}
       className="transition-[stroke-dasharray] duration-500 motion-reduce:transition-none" />
@@ -102,9 +102,9 @@ function PlaceCircle({ place, calm, canPair, onOpen, onMenu }: { place: RailPlac
         : acts ? "hover:ring-2 hover:ring-ink/15 hover:ring-offset-2 hover:ring-offset-panel" : cn("cursor-default", !place.offline && "opacity-75"))}>
     <PlaceMark place={place} />
     {place.progress !== undefined && <ProgressRing value={place.progress} waiting={place.waiting === true} />}
-    {place.attention && <span aria-hidden="true" data-rail-dot className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-panel bg-danger" />}
-    {place.update && !place.attention && <span aria-hidden="true" data-rail-update className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-panel bg-accent" />}
-    {place.server && <span aria-hidden="true" data-rail-server className="absolute -bottom-0.5 -right-0.5 grid size-3.5 place-items-center rounded-full border border-hairline bg-panel text-ink-secondary">
+    {place.attention && <span aria-hidden="true" data-rail-dot className="absolute -end-0.5 -top-0.5 size-2.5 rounded-full border-2 border-panel bg-danger" />}
+    {place.update && !place.attention && <span aria-hidden="true" data-rail-update className="absolute -end-0.5 -top-0.5 size-2.5 rounded-full border-2 border-panel bg-accent" />}
+    {place.server && <span aria-hidden="true" data-rail-server className="absolute -bottom-0.5 -end-0.5 grid size-3.5 place-items-center rounded-full border border-hairline bg-panel text-ink-secondary">
       <Server size={8} strokeWidth={2.25} />
     </span>}
   </button>;
@@ -127,7 +127,7 @@ function PlaceMenu({ place, top, onClose }: { place: RailPlace; top: number; onC
   };
   const note = paint.locked === "member" || outcome === "refused" ? t("placeLook.member") : paint.locked === "signed-out" ? t("placeLook.signedOut")
     : outcome === "unsupported" ? t("placeLook.unsupported") : null;
-  return <div ref={ref} role="dialog" aria-label={name} data-rail-menu={place.id} className={cn("absolute left-full z-50 ml-2 w-72", MENU_SHEET)} style={{ top }}
+  return <div ref={ref} role="dialog" aria-label={name} data-rail-menu={place.id} className={cn("absolute start-full z-50 ms-2 w-72", MENU_SHEET)} style={{ top }}
     onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
     <div className="flex items-center gap-2 px-2 pt-1">
       <PlaceMark place={place} size={22} />
@@ -146,7 +146,7 @@ function PlaceMenu({ place, top, onClose }: { place: RailPlace; top: number; onC
 function MorePlaces({ places, canPair, onOpen, onMenu, onClose }: { places: RailPlace[]; canPair: boolean; onOpen: (place: RailPlace) => void; onMenu: (at: MenuAt) => void; onClose: () => void }) {
   const [query, setQuery] = useState("");
   const found = matchingPlaces(places, query);
-  return <div role="dialog" aria-label={t("rail.search")} data-rail-more className={cn("absolute bottom-0 left-full z-50 ml-2 w-64", MENU_SHEET)}
+  return <div role="dialog" aria-label={t("rail.search")} data-rail-more className={cn("absolute bottom-0 start-full z-50 ms-2 w-64", MENU_SHEET)}
     onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
     <label className="flex h-8 items-center gap-2 rounded-md bg-ink/[0.05] px-2">
       <Search size={14} aria-hidden="true" className="shrink-0 text-ink-secondary" />
@@ -211,7 +211,7 @@ export function PlacesRail({ chrome = false }: { chrome?: boolean }) {
     setMenu({ place, top: nav ? Math.max(8, Math.min(topWithin(from, nav) - 6, nav.clientHeight - 200)) : 8 });
   };
   return <nav ref={navRef} aria-label={t("rail.label")} data-places-rail style={drag}
-    className={cn("relative w-16 shrink-0 flex-col items-center bg-panel", chrome ? "flex h-full" : "hidden md:flex", calm ? "border-r border-ink/[0.04]" : "border-r border-hairline/50")}>
+    className={cn("relative w-16 shrink-0 flex-col items-center bg-panel", chrome ? "flex h-full" : "hidden md:flex", calm ? "border-e border-ink/[0.04]" : "border-e border-hairline/50")}>
     {/* The macOS traffic lights sit over the rail's top; nothing here takes a click before they end. */}
     <div aria-hidden="true" className={macInset ? "h-[52px] shrink-0" : "h-3 shrink-0"} />
     <ul className="flex min-h-0 flex-col items-center gap-2 overflow-y-auto px-1 py-1" style={noDrag}>
