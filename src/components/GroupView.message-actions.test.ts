@@ -98,7 +98,7 @@ describe("room message actions", () => {
     const items = [...host.querySelectorAll<HTMLButtonElement>("[role=menuitem]")];
     expect(items.map((item) => item.textContent)).toEqual(expect.arrayContaining(["Read this aloud", "Show raw markdown", "Pin message", "Copy message ID"]));
     const speak = items.find((item) => item.textContent === "Read this aloud");
-    expect(speak?.title).toBe("Add an ElevenLabs key in an agent profile to read messages aloud");
+    expect(speak?.title).toBe("Set up a voice provider in this agent's profile to read messages aloud");
     expect(speak?.disabled).toBe(true);
   });
 

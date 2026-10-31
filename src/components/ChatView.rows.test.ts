@@ -202,7 +202,7 @@ describe("chat transcript rows", () => {
       await switchTo("system");
       expect(await speak()).toEqual([t("chat.speak.read"), t("chat.speak.read")]);
       await switchTo("host");
-      expect(await speak()).toEqual([`${t("chat.speak.needsKey")} (off)`, `${t("chat.speak.needsKey")} (off)`]);
+      expect(await speak()).toEqual([`${t("chat.speak.needsSetup")} (off)`, `${t("chat.speak.needsSetup")} (off)`]);
     } finally {
       window.ogb = bridge;
     }
