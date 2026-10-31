@@ -267,7 +267,7 @@ export function CanvasComputers({ open, createRequest, drop, sections, onClose, 
           {viewer?.id === computer.id && <a href={viewer.url} target="_blank" rel="noopener noreferrer" className="mt-2 block rounded-lg px-3 py-2 text-[12px] text-accent hover:bg-control">{t("canvasComputers.openSecure")} <ArrowUpRight size={14} aria-hidden="true" className="inline align-[-2px]" /></a>}
         </article>; })}
       </div>
-      <footer className="border-t border-hairline/40 p-3"><button className={`${control} w-full text-left`} onClick={settings}>{t("canvasComputers.moreSettings")}</button></footer>
+      <footer className="border-t border-hairline/40 p-3"><button className={`${control} w-full text-start`} onClick={settings}>{t("canvasComputers.moreSettings")}</button></footer>
     </aside>}
     {dragging && createPortal(<div role="status" className="pointer-events-none fixed z-[70] rounded-xl border border-accent/40 bg-card px-4 py-3 text-[12px] text-ink shadow-xl" style={{ left: dragging.x + 14, top: dragging.y + 14 }}>
       <span className="flex items-center gap-2"><Box size={15} />{dragging.name}</span>

@@ -1,0 +1,32 @@
+{
+  "id": "search-tool-routing",
+  "name": "Smart Search, Web Read & YouTube Inspector",
+  "version": "1.0.0",
+  "description": "Route web searches, URL extraction, library docs, and YouTube analysis through unified low-token tools.",
+  "defaultEnabled": true,
+  "triggerTerms": [
+    "search",
+    "find online",
+    "look up",
+    "latest news",
+    "research",
+    "pubmed",
+    "arxiv",
+    "http://",
+    "https://",
+    "youtube.com",
+    "youtu.be",
+    "transcript",
+    "سرچ",
+    "جستجو",
+    "بگرد",
+    "پیدا کن",
+    "لینک",
+    "سایت",
+    "مقاله",
+    "یوتیوب",
+    "ویدیو",
+    "اخبار"
+  ],
+  "requiredCapabilities": []
+}

@@ -1,0 +1,19 @@
+{
+  "id": "omb-smart-tools",
+  "name": "OMB Smart Tools",
+  "version": "1.0.0",
+  "description": "Unified web search, page reading and YouTube transcript router (smart-search, smart-read, yt-inspector).",
+  "defaultEnabled": true,
+  "triggerTerms": [
+    "smart-search",
+    "smart-read",
+    "yt-inspector",
+    "سرچ کن",
+    "بگرد",
+    "این آدرس را ببین",
+    "یوتیوب",
+    "deep search",
+    "سرچ عمیق"
+  ],
+  "requiredCapabilities": []
+}

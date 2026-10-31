@@ -7764,8 +7764,8 @@ async function startTurn(
   if (guestConfined && instance.adapter.capabilities.guestTurns !== "confined") {
     throw Object.assign(new Error(guestEngineRefusal(threadId)), { status: 409, code: "guest_engine" });
   }
-  const resolvedImages = extractTurnImages(text, { pdfPages: true });
   const usesNativeImageInput = instance.adapter.capabilities.nativeImageInput === true;
+  const resolvedImages = extractTurnImages(text, { pdfPages: usesNativeImageInput });
   let providerText = promptWithDataContext(usesNativeImageInput ? resolvedImages.text : text, opts?.dataContext);
   const turnImages = usesNativeImageInput ? resolvedImages.images : [];
   const commsDepth = opts?.commsDepth ?? 0;
