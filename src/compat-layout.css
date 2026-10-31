@@ -52,7 +52,7 @@
 /* 1. Give the panel a little depth and soften the divider. */
 aside[data-sidebar] {
   background: color-mix(in srgb, var(--color-panel) 94%, var(--color-ink));
-  border-right-color: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  border-inline-end-color: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 /* 2. Conversation rows: even rhythm, rounded, and a quiet accent bar when current. */
@@ -141,7 +141,3 @@ aside[data-sidebar] *::-webkit-scrollbar-track {
   }
 }
 
-html[dir="rtl"] aside[data-sidebar] {
-  border-right-width: 0;
-  border-left: 1px solid color-mix(in srgb, var(--color-ink) 4%, transparent);
-}
