@@ -16,7 +16,7 @@ import { EFFORT_LEVELS, isEffortLevel } from "../../shared/wire";
 import { setColorUserBubbles, useColorUserBubbles } from "@/lib/user-bubble-preference";
 import { setShowThreads, useShowThreadsChoice } from "@/lib/thread-preferences";
 import { setAdvancedMode, useAdvancedMode } from "@/lib/interface-mode";
-import { setPinnedCircles, setUniversalPins, usePinnedCircles, useUniversalPins } from "@/lib/sidebar-preferences";
+import { setPinnedCircles, setUniversalPins, usePinnedCircles, useUniversalPins, SIDEBAR_DEFAULT_WIDTHS, parseSidebarDefaultWidth, setSidebarDefaultWidth, useSidebarDefaultWidth } from "@/lib/sidebar-preferences";
 import { setShowRunCard, useShowRunCard } from "@/lib/run-card-preferences";
 import { parseSendKey, SEND_KEYS, sendKeyLabel, setSendKey, useSendKey } from "@/lib/send-key";
 import { effectiveLanguage, setLanguageChoice, useLanguageChoice } from "@/lib/language-preference";
@@ -269,6 +269,27 @@ export function PinnedCirclesRow() {
         aria-label={t("settings.pinnedCircles.title")}
         onClick={() => setPinnedCircles(!enabled)}
       />
+    </SettingRow>
+  );
+}
+
+export function SidebarWidthRow() {
+  const width = useSidebarDefaultWidth();
+  return (
+    <SettingRow title={t("sidebar.width.title")} subtitle={t("settings.sidebarWidth.subtitle")}>
+      <Select size="sm" className="w-full max-w-[240px]"
+        value={width ?? ""}
+        aria-label={t("sidebar.width.chooseAria")}
+        onChange={(event) => {
+          const next = parseSidebarDefaultWidth(event.target.value);
+          if (next) setSidebarDefaultWidth(next);
+        }}
+      >
+        <option value="">{t("sidebar.width.default")}</option>
+        {SIDEBAR_DEFAULT_WIDTHS.map((option) => (
+          <option key={option} value={option}>{`${option}px`}</option>
+        ))}
+      </Select>
     </SettingRow>
   );
 }

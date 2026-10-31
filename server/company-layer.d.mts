@@ -19,13 +19,13 @@ export interface CompanyBoardProject { tasks: readonly CompanyBoardTask[]; stale
 export interface CompanyBoardState { projects: readonly CompanyBoardProject[]; [key: string]: unknown }
 /** Derived, never persisted: marks open tasks whose conversation and record are both quiet. */
 export function markStaleTasks(state: CompanyBoardState, options?: {
-  staleDays?: number; now?: number; activity?: (threadId: string) => number | undefined;
+  staleDays?: number; now?: number; activity?: (threadId: string, botId?: string) => number | undefined;
 }): CompanyBoardState & { projects: readonly (CompanyBoardProject & { staleCount: number })[]; staleDays: number };
 export interface CompanyHandleContext {
   method: string; path: string; auth?: { scopes?: readonly string[] };
   native?: unknown;
   /** Epoch ms of the newest message in a thread, when the native store knows it. */
-  threadActivity?(threadId: string): number | undefined;
+  threadActivity?(threadId: string, botId?: string): number | undefined;
   /** Days without activity before an open task is marked as stalled. */
   staleDays?: number;
   ensureSection?(section: string, botIds: string[]): void;

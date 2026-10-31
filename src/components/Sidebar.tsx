@@ -16,6 +16,7 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
+import { compactSidebarLabel } from "@/lib/sidebar-labels";
 import { activeLocale, t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
@@ -165,6 +166,8 @@ export function GroupListItem({
     .map((id) => state.bots.find((b) => b.id === id))
     .filter((b): b is Bot => Boolean(b));
   const last = group.messages.at(-1);
+  // A two-language name shows its short form and keeps the rest in the tooltip.
+  const groupName = { ...compactSidebarLabel(group.name), full: group.name };
   return (
     <>
     <div className={cn("group relative", railTile && "mx-auto w-[54px]")}>
@@ -189,13 +192,13 @@ export function GroupListItem({
           ? cn("gap-2 rounded-[10px] py-2 pr-2 group-hover:pr-9 group-focus-within:pr-9 max-md:pr-9 touch:pr-9 md:h-[54px] md:py-0", !group.dm && hasThreadList ? "pl-6" : "pl-2") : "gap-2 py-1.5 pl-6 pr-9",
         selected && !expanded ? "bg-raised" : "hover:bg-raised/50",
       )}
-      title={density === "icons" ? group.name : undefined}
+      title={density === "icons" ? group.name : groupName.rest ? groupName.full : undefined}
       aria-label={density === "icons" ? group.name : undefined}
     >
       <StackedMauses members={members} density={railTile ? "comfortable" : density} large={simpleRow || railTile} />
       <div className={cn("min-w-0 flex-1", density === "icons" && "hidden")}>
         <div className={cn("flex items-baseline justify-between gap-2", simpleRow && "pr-7")}>
-          <span className={cn("truncate text-[14px] text-ink", simpleRow ? "font-medium leading-5" : "font-semibold")}>{group.name}</span>
+          <span title={groupName.rest ? groupName.full : undefined} className={cn("truncate text-[14px] text-ink", simpleRow ? "font-medium leading-5" : "font-semibold")}>{groupName.label}</span>
           {advanced && selected && last && !expanded && <span className="shrink-0 text-[10px] text-ink-secondary">{formatTime(last.at)}</span>}
           {!simpleRow && expanded && group.unread && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label={t("task.unreadMany")} />}
           {simpleRow && !expanded && group.unread && <RowDot />}
@@ -777,6 +780,17 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         <div className={cn("flex items-baseline justify-between gap-2", simpleRow && "pr-7")}>
           <span className={cn("flex min-w-0 grow items-center gap-1.5 truncate text-ink", simpleRow ? "text-[14px] font-medium leading-5" : "text-[15px] font-semibold leading-5")}>
             {!simpleList && bot.pinned && <Pin size={12} className="shrink-0 text-ink-secondary" />}
+            {/* A bot that acts on its own says so in the row, so an unattended one is never a surprise. */}
+            {!iconOnly && approvalModeFor(bot) === "full" && (
+              <span title={t("sidebar.approval.title", { mode: t("sidebar.approval.full") })} className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent">
+                {t("sidebar.approval.full")}
+              </span>
+            )}
+            {!iconOnly && approvalModeFor(bot) === "auto" && (
+              <span title={t("sidebar.approval.title", { mode: t("sidebar.approval.auto") })} className="shrink-0 rounded-full bg-raised px-1.5 py-px text-[10px] font-medium text-ink-secondary">
+                {t("sidebar.approval.auto")}
+              </span>
+            )}
             <RenameTitle
               key={iconOnly ? "icons" : "expanded"}
               value={bot.name}
@@ -1265,9 +1279,13 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         sidePanelOpen ? advanced ? "md:max-w-[320px]" : "md:max-w-[280px]" : "md:max-w-[calc(100vw-320px)]",
         // max-md: rather than an md: cancel: Tailwind v4 emits the native `translate`, and any value but `none` makes
         // this a containing block for its `fixed` descendants.
-        "max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-full max-md:bg-app",
+        // start-0, not left-0: in a right-to-left page the sidebar sits on the right, so the
+        // phone's drawer has to open from that same side.
+        "max-md:absolute max-md:inset-y-0 max-md:start-0 max-md:z-40 max-md:w-full max-md:bg-app",
         "max-md:transition-transform max-md:duration-200",
-        open ? "max-md:translate-x-0" : "max-md:-translate-x-full",
+        // The closed drawer slides toward the edge it lives on; compat-layout.css knows which
+        // way that is, because a fixed -100% pushes it out of the viewport in a right-to-left page.
+        open ? "max-md:translate-x-0" : "sidebar-drawer-closed",
       )}
     >
       <GlassScrollFrame className="flex-1" fade><PlaceTint />

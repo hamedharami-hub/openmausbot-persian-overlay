@@ -73,6 +73,13 @@ aside[data-sidebar] [data-section] span {
   font-size: 11.5px;
 }
 
+/* 3b. Persian labels in an LTR sidebar: let the text decide its own direction, so a
+   Persian-first label reads right to left and the ellipsis lands on the side the
+   reader expects. Without it the tail is cut on the wrong edge. */
+aside[data-sidebar] span.truncate {
+  unicode-bidi: plaintext;
+}
+
 /* 4. Persian text needs room, not tracking. */
 aside[data-sidebar] {
   line-height: 1.85;

@@ -11,6 +11,34 @@ export const SIDEBAR_DENSITY_KEY = "openmausbot.sidebarDensity";
 export const SIDEBAR_TOOLS_LAYOUT_KEY = "openmausbot.sidebarToolsLayout";
 export const SIDEBAR_WIDTH_KEY = "openmausbot.sidebarWidth";
 export const SIMPLE_SIDEBAR_WIDTH_KEY = "openmausbot.sidebarWidth.simple";
+export const SIDEBAR_DEFAULT_WIDTH_KEY = "openmausbot.sidebarDefaultWidth";
+export const SIDEBAR_DEFAULT_WIDTHS = [280, 320, 360, 420] as const;
+export type SidebarDefaultWidth = (typeof SIDEBAR_DEFAULT_WIDTHS)[number];
+
+export function parseSidebarDefaultWidth(value: string | null): SidebarDefaultWidth | null {
+  const parsed = Number(value);
+  return (SIDEBAR_DEFAULT_WIDTHS as readonly number[]).includes(parsed) ? parsed as SidebarDefaultWidth : null;
+}
+
+/** The width the sidebar starts at. A wider sidebar fits a long Persian name without cutting it. */
+export function loadSidebarDefaultWidth(storage?: Pick<Storage, "getItem"> | null): SidebarDefaultWidth | null {
+  try {
+    const target = storage === undefined ? (globalThis.localStorage ?? null) : storage;
+    return parseSidebarDefaultWidth(target?.getItem(SIDEBAR_DEFAULT_WIDTH_KEY) ?? null);
+  } catch {
+    return null;
+  }
+}
+
+export function saveSidebarDefaultWidth(width: SidebarDefaultWidth, storage?: Pick<Storage, "setItem"> | null): void {
+  try {
+    const target = storage === undefined ? (globalThis.localStorage ?? null) : storage;
+    target?.setItem(SIDEBAR_DEFAULT_WIDTH_KEY, String(width));
+  } catch {
+    // A browser without storage keeps the built-in width.
+  }
+}
+
 export const SIDEBAR_ATTENTION_PINNED_KEY = "openmausbot.sidebarAttentionPinned.v1";
 export const SIDEBAR_COLLAPSED_SECTIONS_KEY = "openmausbot.sidebarCollapsedSections.v1";
 export const SIDEBAR_SECTION_ORDER_KEY = "openmausbot.sidebarSectionOrder.v1";
@@ -456,4 +484,50 @@ export function saveSimpleSectionOrder(
   storage?: Pick<Storage, "setItem"> | null,
 ): void {
   saveStringList(SIMPLE_SIDEBAR_SECTION_ORDER_KEY, ids, storage);
+
+
+let sidebarDefaultWidthSessionChoice: SidebarDefaultWidth | undefined;
+const sidebarDefaultWidthListeners = new Set<() => void>();
+
+function currentSidebarDefaultWidth(): SidebarDefaultWidth | null {
+  return sidebarDefaultWidthSessionChoice ?? loadSidebarDefaultWidth();
+}
+
+function notifySidebarDefaultWidth() {
+  for (const listener of sidebarDefaultWidthListeners) listener();
+}
+
+function onSidebarDefaultWidthStorage(event: StorageEvent) {
+  if (event.key !== SIDEBAR_DEFAULT_WIDTH_KEY && event.key !== null) return;
+  try {
+    if (event.storageArea && event.storageArea !== globalThis.localStorage) return;
+  } catch {
+    return;
+  }
+  sidebarDefaultWidthSessionChoice = undefined;
+  notifySidebarDefaultWidth();
+}
+
+export function subscribeSidebarDefaultWidth(listener: () => void): () => void {
+  sidebarDefaultWidthListeners.add(listener);
+  if (sidebarDefaultWidthListeners.size === 1 && typeof window !== "undefined") {
+    window.addEventListener("storage", onSidebarDefaultWidthStorage);
+  }
+  return () => {
+    sidebarDefaultWidthListeners.delete(listener);
+    if (sidebarDefaultWidthListeners.size === 0 && typeof window !== "undefined") {
+      window.removeEventListener("storage", onSidebarDefaultWidthStorage);
+    }
+  };
+}
+
+export function setSidebarDefaultWidth(width: SidebarDefaultWidth): void {
+  sidebarDefaultWidthSessionChoice = width;
+  saveSidebarDefaultWidth(width);
+  notifySidebarDefaultWidth();
+}
+
+export function useSidebarDefaultWidth(): SidebarDefaultWidth | null {
+  return useSyncExternalStore(subscribeSidebarDefaultWidth, currentSidebarDefaultWidth, () => null);
+
 }

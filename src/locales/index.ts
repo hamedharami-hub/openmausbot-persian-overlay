@@ -1,4 +1,5 @@
 import en from "./en.json";
+import fa from "./fa.json";
 import de from "./de.json";
 import es from "./es.json";
 import fr from "./fr.json";
@@ -21,6 +22,7 @@ export type LocalePack = Partial<Record<LocaleKey, string>>;
 
 export const locales: Record<string, LocalePack> = {
   en,
+  fa,
   de,
   es,
   fr,
@@ -44,6 +46,7 @@ export const locales: Record<string, LocalePack> = {
 
 export const localeChoices: ReadonlyArray<{ code: string; label: string }> = [
   { code: "en", label: "English" },
+  { code: "fa", label: "فارسی" },
   { code: "de", label: "Deutsch" },
   { code: "es", label: "Español" },
   { code: "fr", label: "Français" },

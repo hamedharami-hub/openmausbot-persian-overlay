@@ -9,6 +9,7 @@ import {
   clampSidebarWidth,
   loadSidebarWidth,
   saveSidebarWidth,
+  useSidebarDefaultWidth,
 } from "@/lib/sidebar-preferences";
 
 export function sidebarDefaultWidth(simple: boolean): number {
@@ -37,7 +38,8 @@ export function useSidebarWidth({ simple, sidePanelOpen, sidebarRef }: {
   sidebarRef: RefObject<HTMLElement | null>;
 }) {
   const key = simple ? SIMPLE_SIDEBAR_WIDTH_KEY : SIDEBAR_WIDTH_KEY;
-  const defaultWidth = sidebarDefaultWidth(simple);
+  const preferredWidth = useSidebarDefaultWidth();
+  const defaultWidth = preferredWidth ?? sidebarDefaultWidth(simple);
   const cap = simple ? 400 : 480;
   const maxWidth = sidePanelOpen ? defaultWidth : Math.min(cap, window.innerWidth - 320);
   const [savedWidth, setSavedWidth] = useState<number | null>(() => loadSidebarWidth(undefined, key));

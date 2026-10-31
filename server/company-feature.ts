@@ -32,12 +32,14 @@ export async function createCompanyFeature(native: NativeProjectStore, dataDir: 
     : bundled;
   const store = module.createStore(join(dataDir, "company-layer.json"));
   /** The newest message time of a linked conversation, so a stalled task can be spotted. */
-  const threadActivity = (threadId: string): number | undefined => {
+  const threadActivity = (threadId: string, botId?: string): number | undefined => {
     if (!threadId) return undefined;
+    // A task's conversation belongs to a bot, and the bot's own thread is not that conversation.
+    if (botId) {
+      const task = native.taskByThread(botId, threadId) as { updatedAt?: number } | undefined;
+      if (Number.isFinite(task?.updatedAt)) return task?.updatedAt;
+    }
     if (typeof native.threadActivity === "function") return native.threadActivity(threadId);
-    const bot = native.botByThread(threadId);
-    const botTask = bot ? native.taskByThread(bot.id, threadId) as { updatedAt?: number } | undefined : undefined;
-    if (Number.isFinite(botTask?.updatedAt)) return botTask?.updatedAt;
     const group = native.groupByThread(threadId) as { tasks?: readonly { threadId: string; updatedAt?: number }[] } | undefined;
     const groupTask = group?.tasks?.find(candidate => candidate.threadId === threadId);
     return Number.isFinite(groupTask?.updatedAt) ? groupTask?.updatedAt : undefined;
