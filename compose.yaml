@@ -58,6 +58,14 @@ services:
       - ./deploy/local/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    restart: unless-stopped
+    network_mode: service:omb
+    environment:
+      BIND_ADDRESS: "127.0.0.1:8888"
+    volumes:
+      - ./deploy/searxng/settings.yml:/etc/searxng/settings.yml:ro
 volumes:
   data:
     external: ${OMB_DATA_EXTERNAL:-false}

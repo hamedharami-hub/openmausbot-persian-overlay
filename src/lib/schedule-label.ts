@@ -1,3 +1,4 @@
+import { activeLocale } from "@/lib/i18n";
 import { atLocalTime } from "@/lib/routine-calendar";
 import type { RoutineSchedule } from "@/lib/routines";
 import { cronScheduleLabel } from "../../shared/cron-label";
@@ -6,17 +7,17 @@ import { limitResetWhen } from "@/lib/limit-resets";
 export const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 export function niceTime(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(at).toLocaleTimeString(activeLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 export function niceDate(at: number): string {
-  return new Date(at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  return new Date(at).toLocaleDateString(activeLocale(), { weekday: "long", month: "long", day: "numeric" });
 }
 
 export function whenLabel(at: number): string {
   const date = new Date(at);
   const sameDay = new Date().toDateString() === date.toDateString();
-  return sameDay ? niceTime(at) : date.toLocaleDateString([], { month: "short", day: "numeric" });
+  return sameDay ? niceTime(at) : date.toLocaleDateString(activeLocale(), { month: "short", day: "numeric" });
 }
 
 export function durationLabel(minutes: number): string {
@@ -47,7 +48,7 @@ function intervalRestrictions(schedule: Extract<RoutineSchedule, { type: "interv
     details.push(`${wallTime(schedule.window.start)}–${wallTime(schedule.window.end)}`);
   }
   if (schedule.endsAt != null) {
-    details.push(`until ${new Date(schedule.endsAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`);
+    details.push(`until ${new Date(schedule.endsAt).toLocaleDateString(activeLocale(), { month: "short", day: "numeric", year: "numeric" })}`);
   }
   return details;
 }

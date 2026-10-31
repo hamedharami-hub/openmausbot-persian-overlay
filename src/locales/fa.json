@@ -147,7 +147,7 @@
   "approval.voice.routine": "{requester} می‌پرسد: {title} زمان‌بندی و دستورها را روی صفحه ببین. تأیید می‌کنی؟",
   "approval.voice.skill": "{requester} می‌پرسد: {title} مهارت را روی صفحه ببین. تأیید می‌کنی که {action} شود؟",
   "approval.yourComputer.app": "لازم دارم از {app} روی کامپیوترت استفاده کنم. یک بار اجازه می‌دهی؟",
-  "approval.yourComputer.browser": "لازم دارم از مرورگرت استفاده کنم که در آن وارد شده‌ای. یک بار اجازه می‌دهی؟",
+  "approval.yourComputer.browser": "لازم دارم از {app} تو که در آن وارد شده‌ای استفاده کنم. یک بار اجازه می‌دهی؟",
   "approval.yourComputer.browserSite": "لازم دارم از {app} تو استفاده کنم که در {site} وارد شده‌ای. یک بار اجازه می‌دهی؟",
   "approval.yourComputer.detail": "{name} برای همین درخواست صفحهٔ تو را می‌بیند و رویش کلیک و تایپ می‌کند.",
   "approval.yourComputer.screen": "لازم دارم برای این کار از صفحهٔ کامپیوترت استفاده کنم. یک بار اجازه می‌دهی؟",

@@ -18,7 +18,7 @@ export const BOX_ENV_PREFIXES: readonly string[] = [
   "LC_", "OMB_", "OPENMAUSBOT_", "NPM_CONFIG_", "npm_config_",
   "ANTHROPIC_", "CLAUDE_", "CODEX_", "OPENAI_", "OPENCODE_", "OPENROUTER_", "GEMINI_", "GOOGLE_", "GROK_", "XAI_",
   "MISTRAL_", "CEREBRAS_", "GROQ_", "META_", "MINIMAX_", "KIMI_", "MOONSHOT_", "CURSOR_", "FACTORY_", "CLINE_", "HERMES_",
-  "MUSE_", "PI_", "DWEB_", "UNSLOTH_", "FAKE_CLAUDE_", "MCP_", "ANTIGRAVITY_", "AGY_",
+  "MUSE_", "PI_", "DWEB_", "UNSLOTH_", "FAKE_CLAUDE_", "MCP_", "ANTIGRAVITY_", "AGY_", "TAVILY_", "SEARXNG_", "EXA_",
 ];
 
 /** Never, whatever the allow-list says: the control plane's settings and secrets, and the server's own placement. */

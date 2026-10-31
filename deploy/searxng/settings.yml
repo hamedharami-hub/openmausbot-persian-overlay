@@ -1,0 +1,9 @@
+use_default_settings: true
+search:
+  formats:
+    - html
+    - json
+server:
+  limiter: false
+  # Placeholder: the install script replaces this with a random secret.
+  secret_key: "openmausbot-local-searxng-secret"

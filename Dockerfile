@@ -65,7 +65,7 @@ RUN apt-get update \
     libcairo2 libgdk-pixbuf-2.0-0 libxrender1 libasound2 libfreetype6 \
     libfontconfig1 libdbus-1-3 libnss3 libnss3-tools libnspr4 \
     libatk-bridge2.0-0 libdrm2 libxkbcommon0 libatspi2.0-0 libcups2 \
-    libxshmfence1 libgbm1 fonts-noto-color-emoji fonts-noto-cjk fonts-freefont-ttf \
+    libxshmfence1 libgbm1 poppler-utils ffmpeg fonts-vazirmatn fonts-noto-color-emoji fonts-noto-cjk fonts-freefont-ttf \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --create-home --home-dir /data --shell /bin/bash maus
 # The bots' browser (docs/plans/browser-engine.md): the pinned agent-browser
@@ -184,6 +184,11 @@ COPY --from=build --chown=maus:maus /src/dist-native/duckdb/linux-x64 ./duckdb
 COPY --from=build --chown=maus:maus /src/dist-server ./dist-server
 COPY --from=build --chown=maus:maus /src/dist ./dist
 COPY --from=build --chown=maus:maus /src/skills ./skills
+COPY --from=build --chmod=0755 /src/scripts/omb-smart-tools.py /usr/local/bin/omb-smart-tools
+RUN printf '#!/bin/sh\nexec /usr/local/bin/omb-smart-tools smart-search "$@"\n' > /usr/local/bin/smart-search \
+  && printf '#!/bin/sh\nexec /usr/local/bin/omb-smart-tools smart-read "$@"\n' > /usr/local/bin/smart-read \
+  && printf '#!/bin/sh\nexec /usr/local/bin/omb-smart-tools yt-inspector "$@"\n' > /usr/local/bin/yt-inspector \
+  && chmod 0755 /usr/local/bin/smart-search /usr/local/bin/smart-read /usr/local/bin/yt-inspector
 ENV HOME=/data
 VOLUME ["/data"]
 USER maus

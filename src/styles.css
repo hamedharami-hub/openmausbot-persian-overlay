@@ -1037,7 +1037,7 @@
    and a generic family listed later would otherwise win. */
 @font-face {
   font-family: "omb-chat";
-  src: local("Noto Naskh Arabic"), local("Noto Sans Arabic"), local("Geeza Pro"), local("SF Arabic");
+  src: local("Vazirmatn Variable"), local("Vazirmatn"), local("IRANSansX"), local("Dana"), local("Noto Sans Arabic"), local("Noto Naskh Arabic"), local("Geeza Pro"), local("SF Arabic");
   unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
 }
 @font-face {
@@ -1069,8 +1069,9 @@
 [data-simple-rows] > [data-tuck] > :first-child {
   margin-top: -4px;
 }
-/* Arabic and Hebrew script needs the taller line the rest of the app gives it. */
-[data-chat-bubble="simple"] .chat-md [dir="rtl"] {
+/* Arabic, Persian and Hebrew script needs the taller line the rest of the app gives it. */
+[data-chat-bubble="simple"] .chat-md [dir="rtl"],
+:root[dir="rtl"] [data-chat-bubble="simple"] :is(.chat-md, .chat-text) {
   line-height: 1.75;
 }
 
@@ -1139,10 +1140,15 @@ body,
   --font-sans: "Iowan Old Style", "Charter", Georgia, "Times New Roman", serif;
 }
 
+:root:lang(fa),
+:root[dir="rtl"] {
+  --font-rtl: "Vazirmatn Variable", "Vazirmatn", "IRANSansX", "Dana", "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+
 body {
   background-color: var(--color-app);
   color: var(--color-ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-rtl, "omb-chat"), var(--font-sans);
   /* Chromium on macOS thickens every stem under the default (`auto`)
      smoothing, so regular text reads close to semibold on dark skins.
      Windows ignores both properties. */

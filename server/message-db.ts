@@ -736,12 +736,17 @@ function peerAuthor(peerName: string | null, text: string): string | null {
 const PEER_NOTE_HEAD_CHARS = 160;
 
 const STOP_WORDS = new Set(
-  "a an and are as at be by did do for from had has have how i in is it its of on or that the this to was we were what when where which who why with you your".split(" "),
+  "a an and are as at be by did do for from had has have how i in is it its of on or that the this to was we were what when where which who why with you your از به در با که این آن را برای است بود شد هم یک تا بر روی".split(" "),
 );
+
+function normalizePersianQuery(value: string): string {
+  return value.replace(/\u064a/g, "\u06cc").replace(/\u0643/g, "\u06a9").replace(/\u200c/g, " ");
+}
 
 /** Quote every token so FTS5 searches `AND`, `NOT`, `*`, `:` literally instead of parsing them. */
 function ftsQuery(query: string, mode: SearchMode = "all"): string | null {
-  const tokens = query
+  const normalized = normalizePersianQuery(query);
+  const tokens = normalized
     .split(/\s+/)
     .map((token) => token.replace(/"/g, "").trim())
     .filter(Boolean);
@@ -770,7 +775,7 @@ const RECALL_FILLER = new Set(
 
 export function recallTerms(query: string): string[] {
   const out: string[] = [];
-  for (const raw of query.split(/\s+|(?<=\p{L})[/,;:.—–-]+(?=\p{L})/u)) {
+  for (const raw of normalizePersianQuery(query).split(/\s+|(?<=\p{L})[/,;:.—–-]+(?=\p{L})/u)) {
     const token = raw.replace(/"/g, "").replace(/^[\s.,;:!?()[\]{}'`“”‘’]+|[\s.,;:!?()[\]{}'`“”‘’]+$/g, "").toLowerCase();
     if (token.length < 2 && !/\d/.test(token)) continue;
     if (!/[\p{L}\p{N}]/u.test(token)) continue;
