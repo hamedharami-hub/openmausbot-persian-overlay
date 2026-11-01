@@ -586,7 +586,7 @@ const Bubble = memo(function Bubble({
             className="rounded p-0.5 hover:bg-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
             title={t("chat.previousVersion")}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={14} className="rtl:-scale-x-100" />
           </button>
           <span className="tabular-nums">
             {versionIndex + 1}/{forks.length}
@@ -597,7 +597,7 @@ const Bubble = memo(function Bubble({
             className="rounded p-0.5 hover:bg-raised hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
             title={t("chat.nextVersion")}
           >
-            <ChevronRight size={14} />
+            <ChevronRight size={14} className="rtl:-scale-x-100" />
           </button>
         </div>
       )}

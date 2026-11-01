@@ -594,7 +594,7 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
               if (next.has(project.id)) next.delete(project.id); else next.add(project.id);
               return next;
             })} className="flex size-6 shrink-0 items-center justify-center rounded outline-none hover:text-ink focus-visible:ring-1 focus-visible:ring-accent/60" aria-label={t(open ? "task.collapseNamed" : "task.expandNamed", { name: project.name })}>
-              <ChevronRight aria-hidden="true" size={11} className={cn("shrink-0 transition-transform", open && "rotate-90")} />
+              <ChevronRight aria-hidden="true" size={11} className={cn("shrink-0 transition-transform rtl:-scale-x-100", open && "rotate-90 rtl:-rotate-90")} />
             </button>
             <button type="button" aria-label={t("folder.iconNamed", { name: project.name })} title={t("folder.iconNamed", { name: project.name })} onClick={() => setEditingProject(project.id)} className="flex size-6 shrink-0 items-center justify-center rounded hover:bg-raised"><FolderIcon emoji={project.emoji} size={14} /></button>
             <button type="button" data-sidebar-folder-label={project.id} draggable={!reordering} aria-expanded={open} onClick={() => setCollapsed((previous) => {

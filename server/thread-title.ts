@@ -18,7 +18,7 @@ export function threadTitlePrompt(text: string, source: ThreadTitleSource = "fir
   const { ask, label } = TITLE_PROMPT[source];
   return [
     ask,
-    "Reply with only a short title: 3 to 6 words, plain text, no quotes, no trailing period.",
+    "Reply with only a short title in the same language as the text below: 3 to 6 words, plain text, no quotes, no trailing period.",
     label,
     text.trim().slice(0, TITLE_INPUT_MAX_CHARS),
   ].join("\n");

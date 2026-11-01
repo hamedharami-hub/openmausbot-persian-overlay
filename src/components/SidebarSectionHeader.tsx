@@ -83,7 +83,7 @@ export function SidebarSectionHeader({
     const tail = (
       <span aria-hidden="true" className="relative flex size-4 shrink-0 items-center justify-center">
         {count !== undefined && <span className={cn("text-[12px] tabular-nums leading-4 text-ink-secondary transition-opacity", onToggle && "group-hover/section:opacity-0 group-focus-within/section:opacity-0 touch:opacity-0")}>{count}</span>}
-        {onToggle && <Chevron size={14} className="absolute text-ink-secondary opacity-0 transition-opacity group-hover/section:opacity-100 group-focus-within/section:opacity-100 touch:opacity-100" />}
+        {onToggle && <Chevron size={14} className={cn("absolute text-ink-secondary opacity-0 transition-opacity group-hover/section:opacity-100 group-focus-within/section:opacity-100 touch:opacity-100", collapsed && "rtl:-scale-x-100")} />}
       </span>
     );
     return (
@@ -153,7 +153,7 @@ export function SidebarSectionHeader({
           <span className="truncate text-[12px] font-semibold text-ink-secondary">
             {name}
           </span>
-          <Chevron size={13} className="shrink-0 text-ink-secondary" aria-hidden="true" />
+          <Chevron size={13} className={cn("shrink-0 text-ink-secondary", collapsed && "rtl:-scale-x-100")} aria-hidden="true" />
           <SectionAttention attention={attention} label={attentionLabel} alert={alert} />
         </button>
       ) : (

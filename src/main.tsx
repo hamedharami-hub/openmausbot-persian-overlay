@@ -14,6 +14,7 @@ import { PairPage } from "./pair/PairPage";
 import { HomeScreen, SignedOutAtHome } from "./components/HomeScreen";
 import { endedBeforeReload, forgetEndedSession, SESSION_ENDED_REASON } from "./lib/session-ended";
 import "./styles.css";
+import "./compat-layout.css";
 
 // Before first paint; settleAdvancedModeDefault must run before applySkin writes omb-skin.
 settleAdvancedModeDefault();

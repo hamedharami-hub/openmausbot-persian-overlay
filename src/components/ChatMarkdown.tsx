@@ -176,7 +176,7 @@ export interface MermaidDiagramProps {
   code: string;
 }
 
-const MERMAID_FONT = '"Inter", -apple-system, BlinkMacSystemFont, "SF UI Text", "Segoe UI", system-ui, sans-serif';
+const MERMAID_FONT = '"Vazirmatn Variable", "Vazirmatn", "Inter", -apple-system, BlinkMacSystemFont, "SF UI Text", "Segoe UI", system-ui, sans-serif';
 
 /** Security: the only HTML injected is the SVG mermaid.render() returns under securityLevel "strict". */
 export function MermaidDiagram({ code }: MermaidDiagramProps) {

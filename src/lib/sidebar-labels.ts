@@ -13,8 +13,8 @@ const LATIN = /\p{Script=Latin}/u;
 const RTL = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}]/u;
 
 function scriptOf(value: string): "latin" | "rtl" | "other" {
-  if (LATIN.test(value)) return "latin";
   if (RTL.test(value)) return "rtl";
+  if (LATIN.test(value)) return "latin";
   return "other";
 }
 

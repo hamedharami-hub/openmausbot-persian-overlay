@@ -9,6 +9,7 @@ const GREETINGS: { en: Greeting } & Record<string, Greeting> = {
   es: (name, person) => `Hola${person ? ` ${person}` : ""}, soy ${name}. ¿Qué te gustaría que hiciera?`,
   "pt-br": (name, person) => `Oi${person ? ` ${person}` : ""}, eu sou ${name}. O que você gostaria que eu fizesse?`,
   ko: (name, person) => `안녕하세요${person ? `, ${person}님` : ""}. 저는 ${name}입니다. 무엇을 도와드릴까요?`,
+  fa: (name, person) => `سلام${person ? ` ${person}` : ""}، من ${name} هستم. دوست داری چه کاری برایت انجام دهم؟`,
 };
 
 /** What the bot says the moment Set me up is pressed: no model is asked, so it is written here. */
@@ -17,6 +18,7 @@ const SETUP_REQUEST_LINES: { en: string } & Record<string, string> = {
   es: "Genial. Cuéntame con tus propias palabras en qué te gustaría que te ayude y me prepararé para ello. Por ejemplo: \"ordena mi bandeja de entrada cada mañana\" o \"investiga a nuestros competidores cada semana\".",
   "pt-br": "Ótimo. Me conte com suas palavras em que você gostaria de ajuda e eu me preparo para isso. Por exemplo: \"organize minha caixa de entrada toda manhã\" ou \"pesquise nossos concorrentes toda semana\".",
   ko: "좋아요. 도움이 필요한 일을 편하게 말씀해 주시면 거기에 맞게 제가 설정할게요. 예: \"매일 아침 받은편지함 정리해 줘\", \"매주 경쟁사 조사해 줘\".",
+  fa: "عالی است. به زبان خودت بگو در چه کاری کمک می‌خواهی تا خودم را برایش آماده کنم؛ مثلاً: «هر روز صبح ایمیل‌هایم را مرتب کن» یا «هر هفته رقبای ما را بررسی کن».",
 };
 
 /** The answers a blank bot's greeting offers on its setup card. Picking one sets the bot up for its words, as
@@ -30,6 +32,8 @@ const SETUP_CHOICES: { en: readonly string[] } & Record<string, readonly string[
     "Reservas, compras e tarefas", "Dados, planilhas e relatórios"],
   ko: ["리서치와 주제 깊이 파고들기", "이것저것 지켜보기", "이메일, 캘린더, 메시지",
     "예약, 쇼핑, 심부름", "데이터, 스프레드시트, 보고서"],
+  fa: ["تحقیق و بررسی عمیق موضوعات", "زیر نظر داشتن کارها و خبرها برایم", "ایمیل، تقویم و پیام‌ها",
+    "رزرو، خرید و کارهای روزمره", "داده‌ها، جدول‌ها و گزارش‌ها"],
 };
 
 export function setupChoices(language?: string): string[] {

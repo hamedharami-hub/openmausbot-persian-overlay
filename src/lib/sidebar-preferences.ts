@@ -484,7 +484,7 @@ export function saveSimpleSectionOrder(
   storage?: Pick<Storage, "setItem"> | null,
 ): void {
   saveStringList(SIMPLE_SIDEBAR_SECTION_ORDER_KEY, ids, storage);
-
+}
 
 let sidebarDefaultWidthSessionChoice: SidebarDefaultWidth | undefined;
 const sidebarDefaultWidthListeners = new Set<() => void>();
