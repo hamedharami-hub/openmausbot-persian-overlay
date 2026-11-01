@@ -7,11 +7,11 @@ description: "Public web and news search, page extraction, academic lookup and t
 
 Use the release's executables, not system Python. Each executable selects the isolated Python and installed dependencies.
 
-- Search: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/smart-search "query" --top-k 5`
+- Search: `/home/ubuntu/projects/openmausbot-136-release-20261101/release/bin/smart-search "query" --top-k 5`
 - Australian/local lookup: same command with `--region au-en`.
 - News: same command with `--kind news`; use `--fresh` to bypass the five-minute search cache.
-- Page: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/smart-read "https://example.com/article"`
-- Video/topic: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/yt-inspector "URL or topic" --question "question"`
+- Page: `/home/ubuntu/projects/openmausbot-136-release-20261101/release/bin/smart-read "https://example.com/article"`
+- Video/topic: `/home/ubuntu/projects/openmausbot-136-release-20261101/release/bin/yt-inspector "URL or topic" --question "question"`
 
 Search combines SearXNG, Exa and configured Tavily; academic queries add PubMed/Semantic Scholar. DDGS backs up sparse results and handles regional/news requests. Inspect `sources`: disabled, errors and empty results are not successful searches. No results means no evidence, not that the subject does not exist.
 
