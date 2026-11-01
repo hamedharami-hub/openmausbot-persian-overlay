@@ -813,5 +813,8 @@
   "settings.simple.group.system": "سیستم",
   "settings.companyBoard.title": "برد شرکت",
   "settings.companyBoard.subtitle": "برد پروژه‌های استودیو را باز کن: کارها، مسئول‌ها و کارهای رهاشده.",
-  "settings.companyBoard.open": "باز کردن برد شرکت"
+  "settings.companyBoard.open": "باز کردن برد شرکت",
+  "remote.serverPairing.androidQr": "اپ اندروید",
+  "remote.serverPairing.webQr": "آی‌فون یا مرورگر",
+  "remote.serverPairing.copyInvite": "رونوشت لینک اندروید"
 }

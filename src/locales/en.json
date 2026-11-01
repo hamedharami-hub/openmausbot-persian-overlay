@@ -7261,5 +7261,8 @@
   "botAccess.viewOnlyRoom": "You can only view {bot}, so you can read this room but not write in it.",
   "settings.companyBoard.title": "Company board",
   "settings.companyBoard.subtitle": "Open the project board for your studio: tasks, owners and stalled work.",
-  "settings.companyBoard.open": "Open company board"
+  "settings.companyBoard.open": "Open company board",
+  "remote.serverPairing.androidQr": "Android app",
+  "remote.serverPairing.webQr": "iPhone or browser",
+  "remote.serverPairing.copyInvite": "Copy Android link"
 }

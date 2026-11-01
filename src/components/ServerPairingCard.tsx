@@ -18,6 +18,7 @@ export interface PairingOffer {
   code: string;
   expiresAt: number;
   url: string | null;
+  inviteUrl?: string | null;
   hint: string | null;
 }
 
@@ -139,9 +140,9 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
     }
   }
 
-  async function copyLink() {
-    if (!offer?.url) return;
-    const result = await copyText(offer.url);
+  async function copyLink(value = offer?.url) {
+    if (!value) return;
+    const result = await copyText(value);
     if (result !== "empty") setCopied(result);
   }
 
@@ -151,14 +152,33 @@ export function ServerPairingCard({ initialSession = null, initialPairingCodes =
             <p className="text-[13px] text-ink-secondary">{t("remote.serverPairing.expired")}</p>
           ) : (
             <div className="flex flex-wrap items-start gap-5">
+              {offer.inviteUrl ? (
+                <div className="text-center">
+                  <div className="rounded-md bg-white p-2">
+                    <QRCodeSVG value={offer.inviteUrl} size={160} level="M" bgColor="#ffffff" fgColor="#111111" />
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink-secondary">{t("remote.serverPairing.androidQr")}</div>
+                </div>
+              ) : null}
               {offer.url ? (
-                <div className="rounded-md bg-white p-2">
-                  <QRCodeSVG value={offer.url} size={160} level="M" bgColor="#ffffff" fgColor="#111111" />
+                <div className="text-center">
+                  <div className="rounded-md bg-white p-2">
+                    <QRCodeSVG value={offer.url} size={160} level="M" bgColor="#ffffff" fgColor="#111111" />
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink-secondary">{t("remote.serverPairing.webQr")}</div>
                 </div>
               ) : null}
               <div className="min-w-[200px] flex-1">
                 <div className="font-mono text-[18px] tracking-[0.14em] text-ink">{offer.code}</div>
                 <div className="mt-1 text-[13px] text-ink-secondary">{t("remote.serverPairing.expires", { minutes: minutesLeft(offer.expiresAt, now) })}</div>
+                {offer.inviteUrl ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <code className="break-all text-[12px] text-ink-secondary">{offer.inviteUrl}</code>
+                    <button type="button" onClick={() => void copyLink(offer.inviteUrl)} className={quiet}>
+                      {t(copied === "copied" ? "remote.serverPairing.copied" : copied === "failed" ? "common.copyFailed" : "remote.serverPairing.copyInvite")}
+                    </button>
+                  </div>
+                ) : null}
                 {offer.url ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <code className="break-all text-[12px] text-ink-secondary">{offer.url}</code>
