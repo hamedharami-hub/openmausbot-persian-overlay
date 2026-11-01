@@ -172,6 +172,18 @@ export function keySearchResults(query: string): KeyEntry[] {
 
 export const openKeyResult = (entry: KeyEntry) => entry.uses ? openKeySettings(entry.uses, entry.id) : openKeySettings(entry.id);
 
+function CompanyBoardLink() {
+  return (
+    <div className="rounded-2xl border border-hairline/50 bg-raised/40 p-4">
+      <div className="text-[14px] font-medium text-ink">{t("settings.companyBoard.title")}</div>
+      <p className="mt-1 text-[13px] leading-5 text-ink-secondary">{t("settings.companyBoard.subtitle")}</p>
+      <a href="/company" target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-9 items-center rounded-lg bg-accent px-3 text-[13px] font-medium text-white hover:brightness-110">
+        {t("settings.companyBoard.open")}
+      </a>
+    </div>
+  );
+}
+
 export function SettingsModal() {
   const { state, dispatch } = useStore();
   const advanced = useAdvancedMode();
@@ -319,7 +331,7 @@ export function SettingsModal() {
       case "desktopWorkspaces":
         return <ConnectedWorkspacesSettings />;
       case "organization":
-        return window.ogb?.organization && !remoteActive ? <OrganizationSettings /> : null;
+        return window.ogb?.organization && !remoteActive ? <OrganizationSettings /> : <CompanyBoardLink />;
       case "cloudAccount":
         return (window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true)) && !remoteActive
           ? <CloudAccountSettings linkRequest={state.appSettingsCloudLink} cloudHome={state.config?.cloudHome === true} teamHome={state.config?.team}

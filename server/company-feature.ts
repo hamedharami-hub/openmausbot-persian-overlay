@@ -46,8 +46,8 @@ export async function createCompanyFeature(native: NativeProjectStore, dataDir: 
   };
   const staleDays = staleDaysFromEnv();
   const route: RouteHandler = async ctx => {
-    if (!(ctx.path === "/company" || ctx.path === "/api/company" || ctx.path.startsWith("/api/company/"))) return PASS;
-    if (ctx.method === "GET" && (ctx.path === "/company" || ctx.path === "/api/company/ui") && ctx.auth.scopes.includes("admin")) {
+    if (!(ctx.path === "/company" || ctx.path === "/company/" || ctx.path === "/api/company" || ctx.path.startsWith("/api/company/"))) return PASS;
+    if (ctx.method === "GET" && (ctx.path === "/company" || ctx.path === "/company/" || ctx.path === "/api/company/ui") && ctx.auth.scopes.includes("admin")) {
       ctx.res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
       ctx.res.end(companyPage);
       return;
