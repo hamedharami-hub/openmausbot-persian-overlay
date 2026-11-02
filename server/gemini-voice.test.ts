@@ -30,7 +30,7 @@ describe("Gemini voice", () => {
     expect(url).toContain("gemini-3.8-flash-tts:generateContent");
     expect(url).not.toContain("test-secret");
     expect(options.headers["x-goog-api-key"]).toBe("test-secret");
-    expect(options.body).toContain("سلام. Hello.");
+    expect(JSON.parse(options.body).contents[0].parts).toEqual([{ text: "سلام. Hello." }]);
     expect(options.body).not.toContain("test-secret");
   });
 

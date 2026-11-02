@@ -2,7 +2,14 @@ name: Voice overlay release
 on:
   push:
     branches: [local/0.1.136-persian-overlay]
-    paths: [.github/workflows/voice-overlay-build.yml]
+    paths:
+      - .github/workflows/voice-overlay-build.yml
+      - server/gemini-voice*.ts
+      - server/routes/gemini-voice*.ts
+      - server/tts/index.ts
+      - src/lib/use-browser-dictation*
+      - src/components/Composer.tsx
+      - src/components/VoiceSettings.tsx
   workflow_dispatch:
 permissions:
   contents: read

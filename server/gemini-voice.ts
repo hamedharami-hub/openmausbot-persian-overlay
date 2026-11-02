@@ -54,7 +54,7 @@ export async function synthesizeGemini(text: string, voice: string, key: string,
   if (!text.trim() || text.length > 500) throw new Error("Voice text must contain 1–500 characters.");
   const voiceName = GEMINI_VOICES.some((v) => v.id === voice) ? voice : "Kore";
   const parts = await generate(key, GEMINI_TTS_MODEL, {
-    contents: [{ parts: [{ text: `Read the following text aloud exactly as written. Preserve Persian and English in their original languages; do not translate or answer it:\n${text}` }] }],
+    contents: [{ parts: [{ text }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
