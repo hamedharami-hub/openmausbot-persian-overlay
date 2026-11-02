@@ -28,6 +28,8 @@ type Option = ModelCatalog["options"][number];
 
 export interface OpenRouterModelRow {
   id?: unknown;
+  name?: unknown;
+  created?: unknown;
   pricing?: unknown;
   supported_parameters?: unknown;
 }
@@ -64,6 +66,25 @@ export function freeDefault(freeTools: readonly string[]): string | undefined {
 export function freeToolsFirst(options: readonly Option[], freeTools: readonly string[]): Option[] {
   const free = new Set(freeTools);
   return [...options.filter((option) => free.has(option.id)), ...options.filter((option) => !free.has(option.id))];
+}
+
+const modelProvider = (id: string): string => id.split("/")[0]?.toLowerCase() ?? "";
+
+/** OpenRouter's active catalog stays the source of truth: keep every free model and the newest paid model from each provider. */
+export function curatedOpenRouterRows(rows: readonly OpenRouterModelRow[]): OpenRouterModelRow[] {
+  const valid = rows.filter((row): row is OpenRouterModelRow & { id: string } => typeof row.id === "string" && row.id.includes("/"));
+  const newestPaid = new Map<string, OpenRouterModelRow & { id: string }>();
+  for (const row of valid) {
+    if (isFreeModel(row) || row.id.endsWith(":batch")) continue;
+    const provider = modelProvider(row.id);
+    const current = newestPaid.get(provider);
+    const created = typeof row.created === "number" ? row.created : 0;
+    const currentCreated = typeof current?.created === "number" ? current.created : 0;
+    if (!current || created > currentCreated || (created === currentCreated && row.id < current.id)) newestPaid.set(provider, row);
+  }
+  const keep = new Set(valid.filter(isFreeModel).map((row) => row.id));
+  for (const row of newestPaid.values()) keep.add(row.id);
+  return valid.filter((row) => keep.has(row.id));
 }
 
 /** Before OpenRouter's catalog arrives, a free-tier key already defaults to the first preferred free model. */

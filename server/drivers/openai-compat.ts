@@ -5,8 +5,8 @@ import { isLoopback } from "../provider-key-check.ts";
 import { lmStudioV1Catalog } from "./local-inject.ts";
 import { createOpenAIChatRuntime } from "./openai-chat.ts";
 import {
-  freeDefault, freeFallbackCatalog, freeLabel, freeToolModels, freeToolsFirst, isOpenRouterOrigin, openRouterFreeTier,
-  withOpenRouterTurns, type OpenRouterModelRow,
+  curatedOpenRouterRows, freeDefault, freeFallbackCatalog, freeLabel, freeToolModels, freeToolsFirst,
+  isOpenRouterOrigin, openRouterFreeTier, withOpenRouterTurns, type OpenRouterModelRow,
 } from "./openrouter-free.ts";
 
 const DRIVER_KIND = "openai-compat";
@@ -223,6 +223,7 @@ export const OpenAICompatDriver: ProviderDriver<OpenAICompatConfig> = {
         type Row = OpenRouterModelRow & Record<string, unknown> & { name?: unknown; created?: unknown; owned_by?: unknown };
         const json = await response.json() as { data?: Row[] } | Row[];
         let rows = Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : [];
+        if (openRouter) rows = curatedOpenRouterRows(rows);
         // OpenAI lists its catalog unordered and mixed with non-chat models.
         if (config.catalog === "openai") {
           rows = rows

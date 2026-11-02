@@ -5,8 +5,8 @@ import { recordEvents } from "../testing/events.ts";
 import { engineFailureKind } from "./engine-errors.ts";
 import { OpenAICompatDriver } from "./openai-compat.ts";
 import {
-  FREE_MODEL_PREFERENCE, OPENROUTER_FAILURES, freeDefault, freeLabel, freeToolModels, openRouterFailure,
-  type OpenRouterModelRow,
+  FREE_MODEL_PREFERENCE, OPENROUTER_FAILURES, curatedOpenRouterRows, freeDefault, freeLabel, freeToolModels,
+  openRouterFailure, type OpenRouterModelRow,
 } from "./openrouter-free.ts";
 import { classifyError } from "./retry.ts";
 
@@ -97,6 +97,23 @@ describe("free OpenRouter models", () => {
     const unlisted = FREE_TOOL_IDS.filter((id) => !FREE_MODEL_PREFERENCE.includes(id));
     expect(freeDefault(unlisted)).toBe("xingchen-agi/xing4.0-29b-a4b:free");
     expect(freeDefault([])).toBeUndefined();
+  });
+
+  it("keeps every free model and only the newest paid model from each provider", () => {
+    const rows = [
+      { id: "anthropic/claude-old", created: 1 },
+      { id: "anthropic/claude-new", created: 2 },
+      { id: "anthropic/claude-new:batch", created: 3 },
+      { id: "openai/gpt-new", created: 2 },
+      { id: "vendor/model:free", created: 1 },
+      { id: "vendor/zero-price", created: 1, pricing: { prompt: "0", completion: "0" } },
+    ];
+    expect(curatedOpenRouterRows(rows).map((row) => row.id)).toEqual([
+      "anthropic/claude-new",
+      "openai/gpt-new",
+      "vendor/model:free",
+      "vendor/zero-price",
+    ]);
   });
 
   it("marks free models once, by id or by zero prices", () => {
