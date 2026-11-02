@@ -71,9 +71,9 @@ export function freeToolsFirst(options: readonly Option[], freeTools: readonly s
 const modelProvider = (id: string): string => id.split("/")[0]?.toLowerCase() ?? "";
 
 /** OpenRouter's active catalog stays the source of truth: keep every free model and the newest paid model from each provider. */
-export function curatedOpenRouterRows(rows: readonly OpenRouterModelRow[]): OpenRouterModelRow[] {
-  const valid = rows.filter((row): row is OpenRouterModelRow & { id: string } => typeof row.id === "string" && row.id.includes("/"));
-  const newestPaid = new Map<string, OpenRouterModelRow & { id: string }>();
+export function curatedOpenRouterRows<T extends OpenRouterModelRow>(rows: readonly T[]): T[] {
+  const valid = rows.filter((row): row is T & { id: string } => typeof row.id === "string" && row.id.includes("/"));
+  const newestPaid = new Map<string, T & { id: string }>();
   for (const row of valid) {
     if (isFreeModel(row) || row.id.endsWith(":batch")) continue;
     const provider = modelProvider(row.id);
