@@ -381,7 +381,11 @@ export function createThreadRoutes(deps: ThreadRouteDeps): RouteHandler {
       return json(res, 200, { ok: true });
     }
     if (m && method === "GET") {
-      const attachment = readAttachment(m[1]!);
+      const name = m[1]!;
+      if (!visible.everything && !deps.attachmentInUse(name) && !deps.uploads.owns(auth, name)) {
+        return json(res, 404, { error: "no such attachment" });
+      }
+      const attachment = readAttachment(name);
       if (!attachment) return json(res, 404, { error: "no such attachment" });
       const size = attachment.bytes.byteLength;
       // Visibility is decided per request, so the browser must never reuse one member's copy for another identity.

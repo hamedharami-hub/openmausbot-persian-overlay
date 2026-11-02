@@ -1,4 +1,7 @@
 // Never follows a redirect or accepts a plain-http endpoint off this machine: a token endpoint is where a sign-in code is spent.
+import { isIP } from "node:net";
+
+import { addressClass, namesThisMachine } from "./browser/egress/policy.ts";
 
 export interface McpAuthMetadata {
   issuer: string;
@@ -17,7 +20,15 @@ const FETCH_TIMEOUT_MS = 5_000;
 const MAX_METADATA_BYTES = 65_536;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
-export function isAllowedAuthUrl(value: string): boolean {
+export function isLoopbackAuthUrl(value: string): boolean {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(value).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+export function isAllowedAuthUrl(value: string, options?: { allowLoopback?: boolean }): boolean {
   let url: URL;
   try {
     url = new URL(value);
@@ -25,8 +36,16 @@ export function isAllowedAuthUrl(value: string): boolean {
     return false;
   }
   if (url.username || url.password) return false;
-  if (url.protocol === "https:") return true;
-  return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
+  const hostname = url.hostname.toLowerCase();
+  const allowLoopback = options?.allowLoopback ?? true;
+  if (LOOPBACK_HOSTS.has(hostname)) {
+    return allowLoopback && (url.protocol === "http:" || url.protocol === "https:");
+  }
+  if (url.protocol !== "https:") return false;
+  const bareHost = hostname.replace(/^\[|\]$/g, "");
+  if (namesThisMachine(bareHost)) return false;
+  if (isIP(bareHost) !== 0 && addressClass(bareHost) !== "public") return false;
+  return true;
 }
 
 export function resourceMetadataUrl(wwwAuthenticate: string | null): string | null {
@@ -39,10 +58,11 @@ export function resourceMetadataUrl(wwwAuthenticate: string | null): string | nu
 interface DiscoverOptions {
   fetch?: typeof fetch;
   signal?: AbortSignal;
+  allowLoopback?: boolean;
 }
 
 async function getJson(url: string, options: DiscoverOptions): Promise<Record<string, unknown> | null> {
-  if (!isAllowedAuthUrl(url)) return null;
+  if (!isAllowedAuthUrl(url, { allowLoopback: options.allowLoopback })) return null;
   const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   try {
@@ -105,22 +125,25 @@ export async function discoverMcpAuth(
   } catch {
     return null;
   }
-  const resource = await protectedResource(target, resourceMetadataUrl(wwwAuthenticate), options);
+  const allowLoopback = options.allowLoopback ?? LOOPBACK_HOSTS.has(target.hostname.toLowerCase());
+  const scopedOptions: DiscoverOptions = { ...options, allowLoopback };
+  if (!isAllowedAuthUrl(mcpUrl, { allowLoopback })) return null;
+  const resource = await protectedResource(target, resourceMetadataUrl(wwwAuthenticate), scopedOptions);
   const servers = stringList(resource?.authorization_servers);
   const issuer = servers?.[0] ?? target.origin;
-  if (!isAllowedAuthUrl(issuer)) return null;
-  const metadata = await authorizationServer(issuer, options);
+  if (!isAllowedAuthUrl(issuer, { allowLoopback })) return null;
+  const metadata = await authorizationServer(issuer, scopedOptions);
   if (!metadata) return null;
 
   const authorizationEndpoint = metadata.authorization_endpoint;
   const tokenEndpoint = metadata.token_endpoint;
-  if (typeof authorizationEndpoint !== "string" || !isAllowedAuthUrl(authorizationEndpoint)) return null;
-  if (typeof tokenEndpoint !== "string" || !isAllowedAuthUrl(tokenEndpoint)) return null;
+  if (typeof authorizationEndpoint !== "string" || !isAllowedAuthUrl(authorizationEndpoint, { allowLoopback })) return null;
+  if (typeof tokenEndpoint !== "string" || !isAllowedAuthUrl(tokenEndpoint, { allowLoopback })) return null;
   if (!stringList(metadata.code_challenge_methods_supported)?.includes("S256")) return null;
 
   // RFC 8414 §3.3: the metadata must be for the issuer it was fetched for.
   if (typeof metadata.issuer === "string" && metadata.issuer.replace(/\/+$/, "") !== issuer.replace(/\/+$/, "")) return null;
-  const optionalEndpoint = (value: unknown) => typeof value === "string" && isAllowedAuthUrl(value) ? value : undefined;
+  const optionalEndpoint = (value: unknown) => typeof value === "string" && isAllowedAuthUrl(value, { allowLoopback }) ? value : undefined;
   const registrationEndpoint = optionalEndpoint(metadata.registration_endpoint);
   const revocationEndpoint = optionalEndpoint(metadata.revocation_endpoint);
   const scopes = stringList(resource?.scopes_supported);

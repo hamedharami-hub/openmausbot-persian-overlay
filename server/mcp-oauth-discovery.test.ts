@@ -97,6 +97,16 @@ describe("discoverMcpAuth", () => {
     const { impl } = stubFetch({});
     expect(await discoverMcpAuth("https://mcp.example.com/mcp", null, { fetch: impl })).toBeNull();
   });
+
+  it("refuses loopback or private-network endpoints advertised by a remote MCP server", async () => {
+    const { impl, asked } = stubFetch({
+      "http://127.0.0.1:8799/api/internal": AS,
+      "https://mcp.example.com/.well-known/oauth-protected-resource": { authorization_servers: ["http://127.0.0.1:8799"] },
+    });
+    expect(await discoverMcpAuth("https://mcp.example.com/mcp", 'Bearer resource_metadata="http://127.0.0.1:8799/api/internal"', { fetch: impl })).toBeNull();
+    expect(asked).not.toContain("http://127.0.0.1:8799/api/internal");
+    expect(asked).not.toContain("http://127.0.0.1:8799/.well-known/oauth-authorization-server");
+  });
 });
 
 describe("isAllowedAuthUrl", () => {

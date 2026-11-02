@@ -144,5 +144,8 @@ describe("the upstream address", () => {
     expect(upstreamUrl("https://api.example", "/v1/messages", "")?.href).toBe("https://api.example/v1/messages");
     expect(upstreamUrl("https://hq.example/mcp?key=abc", "", "?session=2")?.href).toBe("https://hq.example/mcp?key=abc&session=2");
     expect(upstreamUrl("not a url", "", "")).toBeNull();
+    expect(upstreamUrl("https://api.example/v1/", "/../admin", "")).toBeNull();
+    expect(upstreamUrl("https://api.example/v1/", "/%2e%2e/admin", "")).toBeNull();
+    expect(upstreamUrl("https://api.example/v1/", "//evil.example/x", "")).toBeNull();
   });
 });

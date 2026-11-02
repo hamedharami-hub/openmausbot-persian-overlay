@@ -8,6 +8,9 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest } from "node:https";
 import type { Socket } from "node:net";
 
+import { resolveTarget, type ResolvedAddress } from "../browser/egress/gate.ts";
+import { boxRefusal } from "./egress-gate.ts";
+
 export const BROKER_TOKEN_PREFIX = "omb_t0_";
 /** A token minted for a process lives this long at most; the process's exit ends it sooner. */
 export const BROKER_PROCESS_TTL_MS = 24 * 60 * 60_000;
@@ -44,6 +47,8 @@ export interface CredentialBrokerOptions {
   now?: () => number;
   /** Test seam: the upstream request function. */
   request?: typeof httpRequest;
+  decide?(target: { host: string; port: number }, addresses: readonly ResolvedAddress[]): Promise<string | null>;
+  resolve?(host: string): Promise<ResolvedAddress[]>;
 }
 
 export interface CredentialBroker {
@@ -72,15 +77,29 @@ export function brokerUrl(port: number, token: string, grant: string): string {
 export function upstreamUrl(upstream: string, path: string, query: string): URL | null {
   let url: URL;
   try { url = new URL(upstream); } catch { return null; }
-  if (path) url.pathname = `${url.pathname.replace(/\/+$/, "")}${path}`;
+  if (path) {
+    let decoded: string;
+    try { decoded = decodeURIComponent(path); } catch { return null; }
+    if (!path.startsWith("/") || path.includes("\\") || path.includes("//") || decoded.includes("..") || decoded.includes("\\") || decoded.includes("//")) {
+      return null;
+    }
+    const base = url.pathname.replace(/\/+$/, "");
+    url.pathname = `${base}${path}`;
+    if (base && url.pathname !== base && !url.pathname.startsWith(`${base}/`)) return null;
+  }
   if (query.length > 1) url.search = url.search ? `${url.search}&${query.slice(1)}` : query;
   return url;
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest();
 
+const pinnedLookup = (addresses: ResolvedAddress[]) => (_host: string, lookupOptions: { all?: boolean }, callback: (...args: any[]) => void) =>
+  lookupOptions.all ? callback(null, addresses) : callback(null, addresses[0]!.address, addresses[0]!.family);
+
 export function openCredentialBroker(options: CredentialBrokerOptions): Promise<CredentialBroker> {
   const now = options.now ?? Date.now;
+  const decide = options.decide ?? boxRefusal;
+  const resolve = options.resolve ?? resolveTarget;
   const tokens = new Map<string, Stored>();
   const stats = { tokens: 0, forwarded: 0, refused: 0 };
   const sockets = new Set<Socket>();
@@ -110,7 +129,7 @@ export function openCredentialBroker(options: CredentialBrokerOptions): Promise<
   };
   const requestFn = options.request;
 
-  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const server: Server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const socket = req.socket;
     if (!sockets.has(socket)) { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); }
     const refuse = (status: number, error: string) => { res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ error })); req.resume(); };
@@ -120,13 +139,31 @@ export function openCredentialBroker(options: CredentialBrokerOptions): Promise<
     const verdict = lookup(token, grant);
     if (!verdict.ok) return refuse(verdict.status, verdict.error);
     const upstream = upstreamUrl(verdict.grant.upstream, path, query);
-    if (!upstream) return refuse(502, "bad_upstream");
+    if (!upstream) { stats.refused += 1; return refuse(502, "bad_upstream"); }
+    const host = upstream.hostname.replace(/^\[|\]$/g, "");
+    const port = Number(upstream.port || (upstream.protocol === "https:" ? 443 : 80));
+    let addresses: ResolvedAddress[] | undefined;
+    if (!requestFn && (options.decide !== undefined || host !== "127.0.0.1")) {
+      addresses = await resolve(host);
+      if (!addresses.length) return refuse(502, "upstream_unreachable");
+      const refusal = await decide({ host, port }, addresses).catch(() => "error");
+      if (refusal !== null) { stats.refused += 1; return refuse(403, "blocked_upstream"); }
+    }
+    if (req.socket.destroyed) return;
     const headers: Record<string, string | string[]> = {};
     for (const [name, value] of Object.entries(req.headers)) if (value !== undefined && !HOP_BY_HOP.has(name) && !CREDENTIAL_HEADERS.has(name)) headers[name] = value;
     for (const [name, value] of Object.entries(verdict.grant.headers)) headers[name.toLowerCase()] = value;
     headers.host = upstream.host;
     const send = requestFn ?? (upstream.protocol === "https:" ? httpsRequest : httpRequest);
-    const forwarded = send({ protocol: upstream.protocol, host: upstream.hostname, port: upstream.port || (upstream.protocol === "https:" ? 443 : 80), method: req.method, path: `${upstream.pathname}${upstream.search}`, headers }, (answer) => {
+    const forwarded = send({
+      protocol: upstream.protocol,
+      host: upstream.hostname,
+      port,
+      method: req.method,
+      path: `${upstream.pathname}${upstream.search}`,
+      headers,
+      ...(addresses ? { lookup: pinnedLookup(addresses) as never } : {}),
+    }, (answer) => {
       const out: Record<string, string | string[]> = {};
       for (const [name, value] of Object.entries(answer.headers)) if (value !== undefined && !HOP_BY_HOP.has(name)) out[name] = value;
       res.writeHead(answer.statusCode ?? 502, out);

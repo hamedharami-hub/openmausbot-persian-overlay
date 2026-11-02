@@ -26,10 +26,12 @@ describe("Windows path destinations", () => {
       "[a](C:\\Users\\Maus\\.openmausbot\\_drafts\\-old\\report.md)",
       "![b](<D:\\.hidden\\chart one.png>)",
       "[c]: C:\\.cache\\notes.md",
+      "[u](\\\\\\\\nas\\\\share\\\\.private\\\\report.md)",
     ].join("\n\n")).urls).toEqual([
       "C:\\Users\\Maus\\.openmausbot\\_drafts\\-old\\report.md",
       "D:\\.hidden\\chart one.png",
       "C:\\.cache\\notes.md",
+      "\\\\nas\\share\\.private\\report.md",
     ]);
   });
 

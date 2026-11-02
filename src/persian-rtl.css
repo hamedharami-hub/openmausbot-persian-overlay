@@ -1,0 +1,36 @@
+/* Standalone Persian & BiDi enhancement stylesheet.
+   Imported at the end of src/styles.css with a single @import line to prevent merge conflicts during updates. */
+
+/* 1. Isolate inline LTR tokens, links, numbers, and code chips inside RTL paragraphs so leading/trailing dots,
+      parentheses, and English words never jump across the sentence. */
+.chat-md [dir="rtl"] :is(a, code, kbd, samp, var, time, [dir="ltr"]) {
+  unicode-bidi: isolate;
+}
+
+/* 2. Ensure list items inside Markdown inherit or compute proper start alignment and keep bullets/numbers on the right for RTL items. */
+.chat-md li[dir="rtl"] {
+  text-align: right;
+  unicode-bidi: isolate;
+}
+.chat-md li[dir="ltr"] {
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
+/* 3. Fix Sidebar thread rows & previews where hardcoded `text-left` / `pl-6` breaks Persian and mixed FA/EN alignment. */
+aside[data-sidebar] [data-sidebar-thread-row] {
+  text-align: start;
+}
+aside[data-sidebar] [data-sidebar-thread-row] [dir="auto"],
+aside[data-sidebar] [data-sidebar-working-phrase] {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* 4. Improve composer & plain-text message bi-directional line stability for mixed Persian/English input. */
+textarea[dir="auto"],
+input[dir="auto"],
+.chat-text {
+  unicode-bidi: plaintext;
+  text-align: start;
+}

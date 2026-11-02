@@ -28,6 +28,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
 
   const threadOwners = new Map<string, ThreadOwner | null>();
   const visibleSets = new Map<string, VisibleSet>();
+  const attachmentThreads = new Map<string, { at: number; threads: readonly string[] }>();
   function threadOwner(threadId: string): ThreadOwner | undefined {
     let owner = threadOwners.get(threadId);
     if (owner === undefined) {
@@ -53,6 +54,7 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
   function forgetVisibility(): void {
     threadOwners.clear();
     visibleSets.clear();
+    attachmentThreads.clear();
   }
   /** Whether a list row about this conversation may go to this session: on a Team Cloud someone else's private chat never. */
   const threadShown = (auth: RequestAuth) => {
@@ -60,7 +62,6 @@ export function createVisibilityHost(deps: VisibilityHostDeps) {
     return (threadId: string) => !visible.hides(threadId);
   };
 
-  const attachmentThreads = new Map<string, { at: number; threads: readonly string[] }>();
   function threadsUsingAttachment(name: string): readonly string[] {
     const cached = attachmentThreads.get(name);
     if (cached && Date.now() - cached.at < 60_000) return cached.threads;

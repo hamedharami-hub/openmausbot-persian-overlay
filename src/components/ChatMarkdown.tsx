@@ -14,6 +14,7 @@ import { remarkMentions, sameMentionPerson, type MentionPeer, type MentionPerson
 import { parseFenceInfo } from "../lib/code-block";
 import { markdownImageName, markdownImageOpenUrl } from "../lib/markdown-image";
 import { repairMarkdownTables } from "../lib/markdown-tables";
+import { smartTextDirection } from "../lib/persian-bidi";
 import { TRANSCRIPT_WINDOW_SIZE } from "../lib/transcript-window";
 import { windowsPathDestinations } from "../../shared/markdown-windows-paths";
 import { GITHUB_REF_CLASS, isUseMyComputerUrl, LINK_CLASS, UseMyComputerLink, usePageOpener, withPageOpen } from "./ChatLinks";
@@ -67,7 +68,7 @@ export function chatUrlTransform(value: string, key = "href"): string {
   if (looksLikeThreadRefUrl(value) || isUseMyComputerUrl(value)) return value;
   // Markdown-to-HTML percent-encodes a destination's backslashes (C:%5CUsers…); restore them and leave other escapes
   // for the server's single decode.
-  const url = /^[a-zA-Z]:%5C/i.test(value) ? value.replace(/%5C/gi, "\\") : value;
+  const url = /^(?:[a-zA-Z]:(?:%5C|[\\/])|%5C%5C)/i.test(value) ? value.replace(/%5C/gi, "\\") : value;
   if (/^file:\/\//i.test(url) || WINDOWS_PATH.test(url) || url.startsWith("\\\\")) {
     return localFilePath(url) ? url : "";
   }
@@ -134,8 +135,7 @@ function unwrapLinkedImages() {
 const RTL_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
 
 export function textDirection(value: string): "rtl" | "ltr" {
-  const strong = /\p{Letter}/u.exec(value);
-  return strong && RTL_LETTER.test(strong[0]) ? "rtl" : "ltr";
+  return smartTextDirection(value);
 }
 
 interface HastNode {
@@ -680,6 +680,9 @@ const MARKDOWN_COMPONENTS: Components = {
   },
   ol({ node, children }: BlockProps) {
     return <ol dir={blockDirection(node)} className="list-decimal space-y-1 ps-5">{children}</ol>;
+  },
+  li({ node, children }: BlockProps) {
+    return <li dir={blockDirection(node)}>{children}</li>;
   },
   h1({ node, children }: BlockProps) {
     return <div dir={blockDirection(node)} className="mt-3 text-[18px] font-semibold">{children}</div>;
