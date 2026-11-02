@@ -1,7 +1,7 @@
 {
   "id": "search-tool-routing",
   "name": "Smart Search, Web Read & YouTube Inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Route web searches, URL extraction, library docs, and YouTube analysis through unified low-token tools.",
   "defaultEnabled": true,
   "triggerTerms": [

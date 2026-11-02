@@ -166,25 +166,24 @@ export function extractTurnImages(
 
   // A PDF is read by looking at its pages. The file tag stays in the text: the bot still has the
   // document's name and path, and a model without picture input can open it with its own tools.
+  let rendered: TurnImageInput[] = [];
   if (wantsPdfPages) {
-    const rendered: TurnImageInput[] = [];
+    const pages: TurnImageInput[] = [];
     for (const tag of fileTagCandidates(text)) {
       const pdf = ownedPdf(tag.path, attachmentsDir);
       if (!pdf) continue;
-      const pages = renderPdfPages(pdf);
-      if (pages.length === 0) continue;
-      const room = maxCount - admitted.length - rendered.length;
+      const room = maxCount - admitted.length - pages.length;
       if (room <= 0) break;
-      rendered.push(...pages.slice(0, room));
+      pages.push(...renderPdfPages(pdf).slice(0, room));
     }
-    if (rendered.length > 0) {
+    if (pages.length > 0) {
       const total = admitted.reduce((sum, item) => sum + item.image.bytes, 0) +
-        rendered.reduce((sum, image) => sum + image.bytes, 0);
-      if (total <= maxBytes) admitted.push(...rendered);
+        pages.reduce((sum, image) => sum + image.bytes, 0);
+      if (total <= maxBytes) rendered = pages;
     }
   }
 
-  return { text: providerText, images: admitted.map((item) => item.image) };
+  return { text: providerText, images: [...admitted.map((item) => item.image), ...rendered] };
 }
 
 export function extractSteerImages(

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+ROOT=/home/ubuntu/projects/openmausbot-smart-release-20261031/release
+RUNTIME=/home/ubuntu/projects/omb-search-upgrade-20261101/py
+export PATH="$RUNTIME/bin:/usr/bin:/bin:${PATH:-}"
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+CMD=$(basename "$0")
+mkdir -p "$HOME/.cache/omb-smart-tools-v2"
+chmod 700 "$HOME/.cache/omb-smart-tools-v2"
+exec /usr/bin/flock -w 90 "$HOME/.cache/omb-smart-tools-v2/router.lock" "$RUNTIME/bin/python" "$ROOT/scripts/omb-smart-tools.py" "$CMD" "$@"

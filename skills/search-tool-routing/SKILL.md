@@ -1,14 +1,24 @@
 ---
 name: search-tool-routing
-description: "Unified routing rules for web search (smart-search), webpage reading (smart-read), coding docs (context7 MCP), and YouTube video analysis (yt-inspector)."
+description: "Public web and news search, page extraction, academic lookup and timestamped YouTube transcripts."
 ---
 
-# Smart Search, Web Read & YouTube Routing
+# Smart tools 1.1.0
 
-Follow these four deterministic rules to avoid rate limits, captcha blocks, and unnecessary multi-turn retries:
+Use the release's executables, not system Python. Each executable selects the isolated Python and installed dependencies.
 
-1. **Web, News & Academic Search**: Run `smart-search "<query>"` in your shell. It queries SearXNG, Exa MCP, Tavily, and PubMed/Semantic Scholar in parallel, merges results via RRF, and reranks the top 5 matches. Do not call `ddgs` or scrape search engines manually.
-2. **Programming & Library Documentation**: When looking up SDKs, frameworks, or API documentation, call the `context7` MCP server tools first if mounted; otherwise run `smart-search "<library> documentation"`.
-3. **Reading Any URL**: Run `smart-read "<url>"` in your shell. It automatically checks native Markdown (`URL.md` / `/llms.txt`), falls back to Jina Reader, and then runs local `Crawl4AI` with disk caching.
-4. **YouTube Search & Timestamped Video Analysis**: Run `yt-inspector "<video_url_or_topic>" --question "<specific question>"` to extract timestamped transcript segments (`youtu.be/ID?t=...`) via `youtube-transcript-api` or Groq Whisper Turbo.
-5. **Interactive Browser Fallback**: Open the interactive browser only when `smart-read` returns `layer: "requires_interactive_browser"` or when you need to log in, click buttons, or submit a form.
+- Search: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/smart-search "query" --top-k 5`
+- Australian/local lookup: same command with `--region au-en`.
+- News: same command with `--kind news`; use `--fresh` to bypass the five-minute search cache.
+- Page: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/smart-read "https://example.com/article"`
+- Video/topic: `/home/ubuntu/projects/openmausbot-smart-release-20261031/release/bin/yt-inspector "URL or topic" --question "question"`
+
+Search combines SearXNG, Exa and configured Tavily; academic queries add PubMed/Semantic Scholar. DDGS backs up sparse results and handles regional/news requests. Inspect `sources`: disabled, errors and empty results are not successful searches. No results means no evidence, not that the subject does not exist.
+
+Read original sources before asserting important facts: snippets are leads, not page reads. The reader tries same-path Markdown, local extraction, then public Jina Reader. It never substitutes the site's llms.txt for the requested page. `requires_interactive_browser` means use OpenMausBot's existing browser. Login, clicking, forms, uploads and authenticated pages always use that browser directly; never send private data or credential-bearing URLs to public readers.
+
+YouTube uses native transcripts, then yt-dlp subtitles, then configured Groq speech recognition. `no_transcript` or an error means no video content was retrieved. Do not infer contents from titles. Returned segments are excerpts, not proof the complete video was viewed.
+
+For library/API documentation use Context7 first only when its tools are actually mounted; otherwise search official documentation. Never claim a configured tool is available without evidence. A regional search does not guarantee current opening hours; check the original site.
+
+Credentials belong only in `~/.config/omb-search/.env`, permissions 0600. Never print or copy them into chat.
