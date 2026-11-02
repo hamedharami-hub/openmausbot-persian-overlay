@@ -136,7 +136,8 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
   return {
     close,
     send(text: string) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(text);
+      // Text travels as a JSON envelope; audio travels as binary frames, so the server never guesses.
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "text", text }));
     },
   };
 }

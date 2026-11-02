@@ -13,6 +13,18 @@ export const FREE_MODEL_PREFERENCE: readonly string[] = [
   "nvidia/nemotron-3.5-lightning:free",
 ];
 
+/** The paid models a bot starts on when the key has credit and the owner chose no model. */
+export const PAID_MODEL_PREFERENCE: readonly string[] = [
+  "anthropic/claude-sonnet-5.5",
+  "openai/gpt-6.1-terra",
+  "google/gemini-4-argon",
+  "deepseek/deepseek-v4.1-flash-1017",
+  "qwen/qwen3.8-max-prime",
+  "x-ai/grok-4.7",
+  "mistralai/mistral-large-4-0",
+  "moonshotai/kimi-k3.1-pro",
+];
+
 export const OPENROUTER_FAILURES = {
   credits: "This model needs OpenRouter credit (HTTP 402). Pick a model marked (free), or add credit at openrouter.ai/credits.",
   privacy: "OpenRouter's privacy settings block this free model (HTTP 404). Allow free model endpoints at openrouter.ai/settings/privacy, or pick another model.",
@@ -61,6 +73,12 @@ export function freeToolModels(rows: readonly OpenRouterModelRow[]): string[] {
 
 export function freeDefault(freeTools: readonly string[]): string | undefined {
   return FREE_MODEL_PREFERENCE.find((id) => freeTools.includes(id)) ?? freeTools[0];
+}
+
+/** The listed paid model the catalog offers, so a bot with credit never starts on an obscure one. */
+export function paidDefault(options: readonly Option[]): string | undefined {
+  const ids = new Set(options.map((option) => option.id));
+  return PAID_MODEL_PREFERENCE.find((id) => ids.has(id));
 }
 
 export function freeToolsFirst(options: readonly Option[], freeTools: readonly string[]): Option[] {

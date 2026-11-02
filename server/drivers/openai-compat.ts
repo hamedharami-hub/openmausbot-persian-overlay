@@ -6,7 +6,7 @@ import { lmStudioV1Catalog } from "./local-inject.ts";
 import { createOpenAIChatRuntime } from "./openai-chat.ts";
 import {
   curatedOpenRouterRows, freeDefault, freeFallbackCatalog, freeLabel, freeToolModels, freeToolsFirst,
-  isOpenRouterOrigin, openRouterFreeTier, withOpenRouterTurns, type OpenRouterModelRow,
+  isOpenRouterOrigin, openRouterFreeTier, paidDefault, withOpenRouterTurns, type OpenRouterModelRow,
 } from "./openrouter-free.ts";
 
 const DRIVER_KIND = "openai-compat";
@@ -266,7 +266,7 @@ export const OpenAICompatDriver: ProviderDriver<OpenAICompatConfig> = {
         if (config.model && !ordered.some((model) => model.id === config.model)) {
           ordered.unshift({ id: config.model, label: config.model, custom: true });
         }
-        catalog = { default: config.model ?? freeDefault(freeTools) ?? ordered[0].id, options: ordered };
+        catalog = { default: config.model ?? freeDefault(freeTools) ?? paidDefault(ordered) ?? ordered[0].id, options: ordered };
       } catch {}
     };
     const loading = apiKey ? Promise.all([

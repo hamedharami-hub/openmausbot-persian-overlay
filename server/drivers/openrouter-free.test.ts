@@ -6,7 +6,7 @@ import { engineFailureKind } from "./engine-errors.ts";
 import { OpenAICompatDriver } from "./openai-compat.ts";
 import {
   FREE_MODEL_PREFERENCE, OPENROUTER_FAILURES, curatedOpenRouterRows, freeDefault, freeLabel, freeToolModels,
-  openRouterFailure, type OpenRouterModelRow,
+  openRouterFailure, paidDefault, type OpenRouterModelRow,
 } from "./openrouter-free.ts";
 import { classifyError } from "./retry.ts";
 
@@ -114,6 +114,16 @@ describe("free OpenRouter models", () => {
       "vendor/model:free",
       "vendor/zero-price",
     ]);
+  });
+
+  it("starts a paid key on a listed flagship model rather than the newest row", () => {
+    const options = [
+      { id: "z-ai/glm-5.3-flashx-legal" },
+      { id: "anthropic/claude-sonnet-5.5" },
+      { id: "openai/gpt-6.1-terra" },
+    ];
+    expect(paidDefault(options)).toBe("anthropic/claude-sonnet-5.5");
+    expect(paidDefault([{ id: "z-ai/glm-5.3-flashx-legal" }])).toBeUndefined();
   });
 
   it("marks free models once, by id or by zero prices", () => {

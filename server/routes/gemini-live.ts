@@ -98,15 +98,20 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
         else { clearTimeout(setupTimer); send({ kind: "error", message: "Gemini Live closed the session." }); finish("upstream closed"); }
       };
 
-      client.on("message", (data: Buffer) => {
+      client.on("message", (data: Buffer, isBinary: boolean) => {
         conversation.lastActivity = Date.now();
         if (!conversation.setupDone) return;
         try {
-          const text = data.toString();
-          // The browser sends either PCM16 audio or plain text, never both in one frame.
-          upstream.send(data.length > 0 && !text.startsWith("{") ? geminiLiveAudioChunk(data) : geminiLiveText(text));
+          if (isBinary) {
+            // Binary frames are PCM16 microphone audio.
+            upstream.send(geminiLiveAudioChunk(data));
+            return;
+          }
+          // Text frames are JSON envelopes, so audio can never be mistaken for words.
+          const envelope = JSON.parse(data.toString()) as { type?: string; text?: string };
+          if (envelope.type === "text" && typeof envelope.text === "string") upstream.send(geminiLiveText(envelope.text));
         } catch {
-          send({ kind: "error", message: "Could not forward the audio." });
+          send({ kind: "error", message: "Could not forward the message." });
         }
       });
       client.on("close", () => finish("browser closed"));
