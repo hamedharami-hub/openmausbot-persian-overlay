@@ -621,6 +621,8 @@ import { createComputerRoutes } from "./routes/computers.ts";
 import { createStatusRoutes } from "./routes/status.ts";
 import { findAntigravityLeftovers, removeAntigravityLeftovers } from "./drivers/antigravity-temp.ts";
 import { createLiveRoutes } from "./routes/live.ts";
+import { createGeminiLiveRoutes } from "./routes/gemini-live.ts";
+import type { GeminiLiveSocket } from "./gemini-live.ts";
 import { createNotificationRoutes } from "./routes/notifications.ts";
 import { createTodayRoutes } from "./routes/today.ts"; import { createInboxRoutes } from "./routes/inbox.ts"; import { createSidebarSectionRoutes } from "./routes/sidebar-sections.ts";
 import { createToolTimingRoute, createUsageRoutes } from "./routes/usage.ts";
@@ -12705,6 +12707,18 @@ ROUTES.push(createLiveRoutes({
 }));
 
 const toolResults = new ToolResults();
+ROUTES.push(createGeminiLiveRoutes({
+  config: () => cfg,
+  upgrades,
+  subject: (threadId) => {
+    const thread = threadId ? store.taskByThread(threadId) : null;
+    const bot = thread ? store.botByThread(thread.threadId) : null;
+    const title = thread?.title?.trim();
+    return [bot?.name, title].filter(Boolean).join(" — ") || "a general conversation";
+  },
+  openSocket: (url) => new WebSocket(url) as unknown as GeminiLiveSocket,
+}));
+
 const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
   if (CLOUD_TEAM) holdBodyDeadline(req, res);
   let url: URL;

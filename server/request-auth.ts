@@ -373,6 +373,8 @@ export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: Reg
   { methods: ["POST"], path: /^\/api\/tts\/speak$/ },
   { methods: ["GET"], path: /^\/api\/gemini-voice\/status$/ },
   { methods: ["POST"], path: /^\/api\/gemini-voice\/transcribe$/ },
+  // a live Gemini conversation: audio and captions, never the key
+  { methods: ["GET"], path: /^\/api\/gemini-live\/conversation$/ },
   // routines: the input carries no cwd or permission field
   { methods: ["GET"], path: /^\/api\/routines$/ },
   { methods: ["POST"], path: /^\/api\/routines$/ },

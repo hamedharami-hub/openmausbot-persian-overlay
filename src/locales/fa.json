@@ -1,5 +1,8 @@
 {
   "composer.cloudVoice.language": "زبان ضبط صدا",
+  "composer.geminiLive.start": "مکالمهٔ زنده",
+  "composer.geminiLive.stop": "پایان مکالمه",
+  "composer.geminiLive.waiting": "در حال شنیدن…",
   "composer.cloudVoice.processing": "در حال تبدیل صدا با Gemini… متن برای بررسی اینجا می‌آید؛ هنوز چیزی به بات ارسال نمی‌شود.",
   "composer.cloudVoice.cancel": "لغو ضبط یا تبدیل صدا",
   "composer.cloudVoice.finish": "پایان ضبط و تبدیل صدا به متن پیش‌نویس",

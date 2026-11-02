@@ -65,6 +65,8 @@ import { goalCoordinatorForComposer, jevRoomRoutingOn, openTaskWorking, roomResp
 import { composerPlaceholder, sendLabels, SIMPLE_CONTROL, slotColors } from "./composer-simple";
 import { PendingApprovalActions, PendingApprovalPanel, pendingApprovals } from "./PendingApproval";
 import { CallButton } from "./CallView";
+import { GeminiLiveConversation } from "./GeminiLiveConversation";
+import { useGeminiVoiceConfigured } from "@/lib/use-gemini-configured";
 import { GroupCallButton } from "./GroupCallView";
 import { ApprovalChip, ComposerPlusMenu, GoalToggle } from "./ComposerPlusMenu";
 import { PhonePlus } from "./PhonePlus";
@@ -220,6 +222,7 @@ export function Composer({
     },
     [text, editText, editAttachments],
   );
+  const geminiLiveAvailable = useGeminiVoiceConfigured();
   const { recording, speechError, toggle: toggleMic, stop: stopDictation, available: dictationAvailable, transcribing, language: dictationLanguage, setLanguage: setDictationLanguage, cloud: cloudDictation } = useComposerDictation({
     draftId, text, onText: editText, available: capabilities.dictation.available,
   });
@@ -993,6 +996,9 @@ export function Composer({
           </button>
           {cloudDictation && recording && <button type="button" onClick={stopDictation} aria-label={t("composer.cloudVoice.cancel")} className="px-1 text-xs text-danger">×</button>}
           </>
+        )}
+        {!locked && geminiLiveAvailable && (
+          <GeminiLiveConversation threadId={bot?.threadId} className="flex-row items-center" />
         )}
         {callShown && bot && !group && <CallButton bot={bot} placement="composer" fill={advanced || singleRow ? undefined : slot.fill} ink={slot.ink} inverse={singleRow} />}
         {callShown && group && !advanced && <GroupCallButton group={group} members={members ?? []} placement="composer" fill={slot.fill} ink={slot.ink} />}
