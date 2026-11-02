@@ -12711,9 +12711,8 @@ ROUTES.push(createGeminiLiveRoutes({
   config: () => cfg,
   upgrades,
   subject: (threadId) => {
-    const thread = threadId ? store.taskByThread(threadId) : null;
-    const bot = thread ? store.botByThread(thread.threadId) : null;
-    const title = thread?.title?.trim();
+    const bot = threadId ? store.botByThread(threadId) : null;
+    const title = bot ? store.taskByThread(bot.id, bot.threadId)?.title?.trim() : undefined;
     return [bot?.name, title].filter(Boolean).join(" — ") || "a general conversation";
   },
   openSocket: (url) => new WebSocket(url, undefined as unknown as string[]) as unknown as GeminiLiveSocket,

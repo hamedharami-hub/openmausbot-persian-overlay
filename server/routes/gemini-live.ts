@@ -42,10 +42,10 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
 
   return async ({ req, res, path, method, auth, json }) => {
     if (!PATH.test(path)) return PASS;
-    const pending = deps.upgrades.pending(req);
-    if (method !== "GET" || !pending) return json(res, 426, { error: "WebSocket upgrade required" });
     const key = geminiLiveKey(deps.config());
     if (!key) return json(res, 409, { error: "Configure haramipourhamedgemini before starting a live conversation." });
+    const pending = deps.upgrades.pending(req);
+    if (method !== "GET" || !pending) return json(res, 426, { error: "WebSocket upgrade required" });
     if (!isSameOrigin(req)) return json(res, 403, { error: "forbidden: cross-origin request" });
     if (!auth.scopes.includes("client") && !auth.scopes.includes("admin")) return json(res, 403, { error: "forbidden" });
 
