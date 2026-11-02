@@ -1,7 +1,6 @@
 // A Gemini Live conversation: the browser speaks to this server over a WebSocket, and the server speaks to
 // Gemini Live. The key never leaves the server, and the browser never learns it.
-import type { IncomingMessage } from "node:http";
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import type { AppConfig } from "../config.ts";
 import { isSameOrigin } from "../request-auth.ts";
 import type { Upgrades } from "./upgrades.ts";
@@ -41,13 +40,6 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
   deps.upgrades.route((path) => PATH.test(path));
   const conversations = new Map<string, Conversation>();
 
-  const closeAll = () => {
-    for (const conversation of conversations.values()) {
-      try { conversation.socket.close(1000, "server closing"); } catch { /* already gone */ }
-    }
-    conversations.clear();
-  };
-
   return async ({ req, res, path, method, auth, json }) => {
     if (!PATH.test(path)) return PASS;
     const pending = deps.upgrades.pending(req);
@@ -64,7 +56,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
     pending.release();
     res.detachSocket(pending.socket);
     const browser = new WebSocketServer({ noServer: true });
-    browser.handleUpgrade(pending.socket, pending.head, (client) => {
+    browser.handleUpgrade(req, pending.socket, pending.head, (client: WebSocket) => {
       const send = (event: LiveEvent) => {
         if (client.readyState === client.OPEN) client.send(JSON.stringify(event));
       };

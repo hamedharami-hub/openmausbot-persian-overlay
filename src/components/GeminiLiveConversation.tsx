@@ -59,7 +59,7 @@ export function GeminiLiveConversation({ threadId, className }: { threadId?: str
           </button>
         ) : (
           <button type="button" onClick={start} aria-label={t("composer.geminiLive.start")} className={cn(button, "text-ink-secondary hover:bg-raised hover:text-ink")}>
-            {phase === "connecting" ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+            {phase === "error" ? <Radio size={14} className="text-danger" /> : <Radio size={14} />}
             {t("composer.geminiLive.start")}
           </button>
         )}

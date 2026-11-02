@@ -8,7 +8,7 @@ export interface GeminiLiveClientOptions {
   threadId?: string;
   onEvent(event: LiveEvent): void;
   onStateChange?(state: "connecting" | "live" | "closed" | "error"): void;
-  createSocket?(): WebSocket;
+  createSocket?(url: string): WebSocket;
   media?: MediaDevices;
   audioContext?: AudioContext;
 }

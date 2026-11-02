@@ -12716,7 +12716,7 @@ ROUTES.push(createGeminiLiveRoutes({
     const title = thread?.title?.trim();
     return [bot?.name, title].filter(Boolean).join(" — ") || "a general conversation";
   },
-  openSocket: (url) => new WebSocket(url) as unknown as GeminiLiveSocket,
+  openSocket: (url) => new WebSocket(url, undefined as unknown as string[]) as unknown as GeminiLiveSocket,
 }));
 
 const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
