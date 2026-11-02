@@ -54,8 +54,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
     const upstream = deps.openSocket(geminiLiveUrl(key));
 
     pending.release();
-    res.detachSocket(pending.socket);
-    const browser = new WebSocketServer({ noServer: true });
+    const browser = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 256 * 1024 });
     browser.handleUpgrade(req, pending.socket, pending.head, (client: WebSocket) => {
       const send = (event: LiveEvent) => {
         if (client.readyState === client.OPEN) client.send(JSON.stringify(event));
@@ -117,6 +116,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
       client.on("close", () => finish("browser closed"));
       client.on("error", () => finish("browser error"));
     });
+    res.detachSocket(pending.socket);
 
     const sweep = setInterval(() => {
       const now = Date.now();
