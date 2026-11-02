@@ -1,4 +1,13 @@
 {
+  "composer.cloudVoice.language": "زبان ضبط صدا",
+  "composer.cloudVoice.processing": "در حال تبدیل صدا با Gemini… متن برای بررسی اینجا می‌آید؛ هنوز چیزی به بات ارسال نمی‌شود.",
+  "composer.cloudVoice.cancel": "لغو ضبط یا تبدیل صدا",
+  "composer.cloudVoice.finish": "پایان ضبط و تبدیل صدا به متن پیش‌نویس",
+  "composer.cloudVoice.hint": "ضبط تا ۲ دقیقه با Gemini؛ صدا به Google ارسال می‌شود و ممکن است سهمیه یا هزینه مصرف کند. متن را پیش از ارسال بررسی کن.",
+  "composer.cloudVoice.tooLarge": "حجم ضبط بیشتر از ۸ مگابایت است؛ کوتاه‌تر ضبط کن.",
+  "composer.cloudVoice.empty": "گفتاری تشخیص داده نشد؛ پیش‌نویس تغییر نکرد.",
+  "composer.cloudVoice.failed": "تبدیل صدا با Gemini ناموفق بود. دسترسی یا سهمیه را بررسی کن؛ پیش‌نویس تغییر نکرد.",
+  "composer.cloudVoice.permission": "دسترسی به میکروفون ممکن نشد. اجازهٔ میکروفون را در مرورگر بده و از HTTPS استفاده کن.",
   "approval.action.allowOnce": "فقط همین یک بار",
   "approval.action.alwaysAllow": "همیشه اجازه بده",
   "approval.action.alwaysAllowCommand": "همیشه این دستور را اجازه بده",

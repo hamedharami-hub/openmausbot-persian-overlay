@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { withOpenSettings } from "@/components/OpenSystemSettings";
 import { t } from "./i18n";
+import { useBrowserDictation } from "./use-browser-dictation";
 
 export function useComposerDictation({ draftId, text, onText, available }: {
   draftId: string;
@@ -8,6 +9,7 @@ export function useComposerDictation({ draftId, text, onText, available }: {
   onText: (text: string) => void;
   available: boolean;
 }) {
+  const browser = useBrowserDictation({ draftId, text, onText, enabled: !available });
   const [recording, setRecording] = useState(false);
   const [speechError, setSpeechError] = useState<ReactNode>(null);
   const draft = useRef({ id: draftId, text });
@@ -86,5 +88,7 @@ export function useComposerDictation({ draftId, text, onText, available }: {
       setRecording(true);
     }
   };
-  return { recording, speechError, toggle, stop };
+  return available
+    ? { recording, speechError, toggle, stop, available: true, transcribing: false, language: browser.language, setLanguage: browser.setLanguage, cloud: false }
+    : { ...browser, cloud: true };
 }

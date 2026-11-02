@@ -24,6 +24,7 @@ import { Switch } from "./SettingsPrimitives";
 import { KeysLink } from "./keys/KeysLink";
 
 const SAMPLE = "Morning. Overnight the tests went green, and I left two notes for you in the thread.";
+const GEMINI_SAMPLE = "سلام، این یک آزمایش صدای فارسی است. Hello, this is an English voice test.";
 const FISH_MODELS = [
   { value: "s2.1-pro", label: "voice.fish.modelPro" },
   { value: "s2.1-pro-free", label: "voice.fish.modelFree" },
@@ -198,7 +199,7 @@ export function VoiceSettings({
       .finally(() => current() && setAddingVoice(null));
   };
 
-  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai") => {
+  const setProvider = (next: "elevenlabs" | "fish" | "system" | "chatterbox" | "xai" | "gemini") => {
     if (next === provider || switching || (next === "system" && !systemVoicesAvailable)) return;
     setSwitching(true);
     setKeyDraft({ provider: null, value: "" });
@@ -311,12 +312,12 @@ export function VoiceSettings({
       {!workspaceConfigurationLocked && (
         <div className="mt-4">
           <div className="mb-2 text-[13px] text-ink-secondary">{t("voice.engine")}</div>
-          {/* Six columns: the three online services share the top row, the two on this computer the bottom one. */}
           <div className="grid grid-cols-6 gap-1 rounded-xl bg-inset p-1" role="radiogroup" aria-label={t("voice.engine")}>
             {([
               { value: "elevenlabs", label: t("voice.elevenlabs.label"), available: true, span: "col-span-2" },
               { value: "fish", label: t("voice.fish.label"), available: true, span: "col-span-2" },
               { value: "xai", label: t("voice.grok.label"), available: true, span: "col-span-2" },
+              { value: "gemini", label: "Gemini · فارسی / English", available: true, span: "col-span-6" },
               { value: "system", label: t("voice.macBuiltIn"), available: systemVoicesAvailable, span: "col-span-3" },
               { value: "chatterbox", label: t("voice.chatterboxLocal"), available: true, span: "col-span-3" },
             ] as const).map((option) => (
@@ -338,6 +339,13 @@ export function VoiceSettings({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {provider === "gemini" && (
+        <div className="mt-3 text-[13px] text-ink-secondary" dir="auto">
+          Gemini · haramipourhamedgemini — فارسی و English به‌صورت خودکار خوانده می‌شوند.
+          Audio/text is sent to Google; API quota or charges may apply.
         </div>
       )}
 
@@ -503,7 +511,7 @@ export function VoiceSettings({
               </Select>
             )}
             <button
-              onClick={() => void speaker.speak(SAMPLE, { voiceId: bot.voice, botId: bot.id })}
+              onClick={() => void speaker.speak(provider === "gemini" ? GEMINI_SAMPLE : SAMPLE, { voiceId: bot.voice, botId: bot.id })}
               disabled={!ready || preparingSample}
               aria-busy={preparingSample}
               title={ready ? t("voice.hear") : t("voice.pickFirst")}

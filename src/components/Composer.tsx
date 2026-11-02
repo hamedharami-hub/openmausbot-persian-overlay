@@ -220,7 +220,7 @@ export function Composer({
     },
     [text, editText, editAttachments],
   );
-  const { recording, speechError, toggle: toggleMic, stop: stopDictation } = useComposerDictation({
+  const { recording, speechError, toggle: toggleMic, stop: stopDictation, available: dictationAvailable, transcribing, language: dictationLanguage, setLanguage: setDictationLanguage, cloud: cloudDictation } = useComposerDictation({
     draftId, text, onText: editText, available: capabilities.dictation.available,
   });
   const [caret, setCaret] = useState(0);
@@ -703,6 +703,7 @@ export function Composer({
 
   return (
     <div className={cn("pointer-events-none relative px-5", simpleDock ? "pb-4" : "pb-3")}>
+      {cloudDictation && (recording || transcribing) && <div role="status" dir="auto" className="pointer-events-auto mb-2 text-[12px] text-ink-secondary">{t(transcribing ? "composer.cloudVoice.processing" : "composer.cloudVoice.hint")}</div>}
       {speechError && (
         <div className="pointer-events-auto mb-2 w-full rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
           {speechError}
@@ -856,7 +857,7 @@ export function Composer({
           rows={1}
           value={text}
           onChange={(e) => {
-            if (recording) stopDictation();
+            if (recording || transcribing) stopDictation();
             editText(e.target.value);
             setCaret(e.target.selectionStart ?? e.target.value.length);
             setDismissedAt(null);
@@ -965,10 +966,20 @@ export function Composer({
             <Square size={simpleDock ? 10 : 14} className="fill-current" />
           </button>
         )}
-        {!locked && !busy && capabilities.dictation.available && (
+        {!locked && (!busy || recording || transcribing) && dictationAvailable && (
+          <>
+          {cloudDictation && <select
+            aria-label={t("composer.cloudVoice.language")}
+            value={dictationLanguage}
+            disabled={recording || transcribing}
+            onChange={(event) => setDictationLanguage(event.target.value as "auto" | "fa" | "en")}
+            className="max-w-20 rounded-lg bg-inset px-1 py-1 text-[11px] text-ink-secondary"
+          >
+            <option value="auto">Auto</option><option value="fa">فارسی</option><option value="en">English</option>
+          </select>}
           <button
             onClick={toggleMic}
-            aria-label={recording ? t("composer.dictation.stop") : t("composer.dictation.start")}
+            aria-label={transcribing ? t("composer.cloudVoice.cancel") : recording ? t("composer.dictation.stop") : t("composer.dictation.start")}
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full",
               simpleDock ? "size-7" : "size-8",
@@ -976,10 +987,12 @@ export function Composer({
                 ? "animate-pulse bg-danger/20 text-danger"
                 : advanced || singleRow ? "text-ink-secondary hover:bg-raised hover:text-ink" : SIMPLE_CONTROL,
             )}
-            title={recording ? t("composer.dictation.stopHint") : t("composer.dictation.hint")}
+            title={cloudDictation ? t(transcribing ? "composer.cloudVoice.cancel" : recording ? "composer.cloudVoice.finish" : "composer.cloudVoice.hint") : recording ? t("composer.dictation.stopHint") : t("composer.dictation.hint")}
           >
-            <Mic size={16} strokeWidth={1.75} absoluteStrokeWidth className="[&_rect]:fill-current" />
+            {transcribing ? <span className="animate-pulse text-xs">…</span> : <Mic size={16} strokeWidth={1.75} absoluteStrokeWidth className="[&_rect]:fill-current" />}
           </button>
+          {cloudDictation && recording && <button type="button" onClick={stopDictation} aria-label={t("composer.cloudVoice.cancel")} className="px-1 text-xs text-danger">×</button>}
+          </>
         )}
         {callShown && bot && !group && <CallButton bot={bot} placement="composer" fill={advanced || singleRow ? undefined : slot.fill} ink={slot.ink} inverse={singleRow} />}
         {callShown && group && !advanced && <GroupCallButton group={group} members={members ?? []} placement="composer" fill={slot.fill} ink={slot.ink} />}
