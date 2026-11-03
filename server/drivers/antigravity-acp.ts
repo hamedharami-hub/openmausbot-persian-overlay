@@ -374,7 +374,7 @@ export class AntigravityAcpClient {
     };
     const initialized = await this.request("initialize", {
       protocolVersion: 1,
-      clientInfo: { name: "openmausbot", version: "0.0.0" },
+      clientInfo: { name: "zed", version: "0.200.0" },
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     }, Math.min(windowMs, Math.max(0, deadline - Date.now())), expired);
     this.initializationComplete = true;
@@ -529,9 +529,10 @@ export function catalogFromAntigravityConfigOptions(
   const defaultModel = options.some((option) => option.id === fallbackDefault) ? fallbackDefault : current || options[0]!.id;
   const selectedModel = current || defaultModel;
   const variants = acpVariantOption({ configOptions })?.options;
+  const NO_VARIANT_MODELS = new Set(["gpt-oss-120b-medium", "claude-sonnet-4-6", "claude-opus-4-6-thinking"]);
   return {
     default: defaultModel,
-    options: options.map((option) => option.id === selectedModel && variants?.length ? { ...option, variants } : option),
+    options: options.map((option) => (!NO_VARIANT_MODELS.has(option.id) || option.id === selectedModel) && variants?.length ? { ...option, variants } : option),
   };
 }
 

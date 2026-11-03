@@ -27,18 +27,22 @@ import { resolveAntigravityReleaseAsset } from "./antigravity-release.ts";
 import { VERIFICATION_TEMP_KEY, scheduleAntigravityTempSweep } from "./antigravity-temp.ts";
 import { augmentedPath } from "../env-path.ts";
 
+const ANTIGRAVITY_VARIANTS = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
+];
+
 export const STATIC_ANTIGRAVITY_MODELS: ModelCatalog = {
   default: "gemini-3.8-flash",
   options: [
-    {
-      id: "gemini-3.8-flash",
-      label: "Gemini 3.8 Flash",
-      variants: [
-        { id: "low", label: "Low" },
-        { id: "medium", label: "Medium" },
-        { id: "high", label: "High" },
-      ],
-    },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", variants: ANTIGRAVITY_VARIANTS },
+    { id: "gemini-4-argon", label: "Gemini 4 Argon", variants: ANTIGRAVITY_VARIANTS },
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", variants: ANTIGRAVITY_VARIANTS },
+    { id: "claude-opus-5-5", label: "Claude Opus 5.5", variants: ANTIGRAVITY_VARIANTS },
+    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+    { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 Thinking" },
+    { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
   ],
 };
 
@@ -47,7 +51,7 @@ export const STATIC_ANTIGRAVITY_MODELS: ModelCatalog = {
  * the suffixed id, or a turn that chose its own level, keeps its selection. */
 export function normalizeAntigravityTurn(turn: SendTurnInput, offeredModels: readonly string[]): SendTurnInput {
   if (turn.variant !== undefined) return turn;
-  const match = turn.model?.match(/^(gemini-3\.8-flash)-(low|medium|high)$/u);
+  const match = turn.model?.match(/^(gemini-3\.8-flash|gemini-4-argon|claude-sonnet-5-5|claude-opus-5-5)-(low|medium|high)$/u);
   return match && offeredModels.includes(match[1]) && !offeredModels.includes(match[0])
     ? { ...turn, model: match[1], variant: match[2] }
     : turn;

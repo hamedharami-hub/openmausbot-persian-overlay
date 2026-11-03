@@ -3,14 +3,20 @@ export interface McpImageContent {
   mimeType: string;
 }
 
-const asMcpImage = (c: unknown): McpImageContent | null =>
-  !!c &&
-  typeof c === "object" &&
-  (c as { type?: unknown }).type === "image" &&
-  typeof (c as McpImageContent).data === "string" &&
-  typeof (c as McpImageContent).mimeType === "string"
-    ? (c as McpImageContent)
-    : null;
+const asMcpImage = (raw: unknown): McpImageContent | null => {
+  const c = (raw as { type?: unknown; content?: unknown } | null)?.type === "content" &&
+    (raw as { content?: unknown }).content &&
+    typeof (raw as { content?: unknown }).content === "object"
+    ? (raw as { content: Record<string, unknown> }).content
+    : (raw as Record<string, unknown> | null);
+  if (!c || typeof c !== "object" || c.type !== "image" || typeof c.data !== "string") return null;
+  const mimeType = typeof c.mimeType === "string"
+    ? c.mimeType
+    : typeof c.mime_type === "string"
+      ? c.mime_type
+      : "image/jpeg";
+  return { data: c.data, mimeType };
+};
 
 // Claude CLI hands MCP images over in Anthropic Messages shape ({type:"image", source:{type:"base64", media_type, data}});
 // codex/acp pass the MCP-native {type, data, mimeType} through.

@@ -285,6 +285,25 @@ async function readAcpImageBlocks(images: readonly TurnImageInput[]) {
   })));
 }
 
+const ACP_MEDIA_PATH_RE = /(?:file:\/\/)?(\/[^\s"'`<>()[\]]+\.(?:mp4|webm|mov|mpeg|mpg|mp3|wav|ogg|m4a|flac|aac|pdf))/giu;
+async function extractAcpResourceLinks(text: string) {
+  if (typeof text !== "string" || !text) return [];
+  const seen = new Set<string>();
+  const out: Array<{ type: "resource_link"; uri: string; name: string }> = [];
+  for (const m of text.matchAll(ACP_MEDIA_PATH_RE)) {
+    const p = m[1];
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    try {
+      const st = await stat(p);
+      if (st.isFile() && st.size > 0) {
+        out.push({ type: "resource_link", uri: `file://${p}`, name: basename(p) });
+      }
+    } catch {}
+  }
+  return out;
+}
+
 function decodeAcpConfig(defaultCli: string) {
   return (raw: unknown): AcpConfig => {
     const o = (raw ?? {}) as Record<string, unknown>;
@@ -1236,7 +1255,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                   "initialize",
                   {
                     protocolVersion: 1,
-                    clientInfo: { name: "openmausbot", version: "0.0.0" },
+                    clientInfo: DRIVER_KIND === "antigravityAgent" ? { name: "zed", version: "0.200.0" } : { name: "openmausbot", version: "0.0.0" },
                     clientCapabilities: {
                       fs: {
                         readTextFile: support.clientFileSystem === true,
@@ -1454,6 +1473,9 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             const imageBlocks = support.images === true && runtimeAcceptsImages
               ? await readAcpImageBlocks(turn.images ?? [])
               : [];
+            const resourceLinks = DRIVER_KIND === "antigravityAgent"
+              ? await extractAcpResourceLinks(text)
+              : [];
             if (support.modelVariants && cliTurn.model && !modelControls.usesAgentDefault() && modelControls.modelOf(session.sessionConfigResult) !== cliTurn.model) {
               throw new Error(`${support.displayName} changed model before the prompt`);
             }
@@ -1467,7 +1489,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             const quiet = startQuietWatch(threadId, session, current);
             const result = await request(
               "session/prompt",
-              { sessionId, prompt: [{ type: "text", text }, ...imageBlocks] },
+              { sessionId, prompt: [{ type: "text", text }, ...imageBlocks, ...resourceLinks] },
               undefined,
               undefined,
               promptIdleMs,
