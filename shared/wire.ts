@@ -1,6 +1,7 @@
 /** The client-visible wire model for tasks, bots, messages and rooms. A field
  * here is one the server emits in every response and SSE frame that carries
  * the shape. */
+import type { ResearchRequest } from "./research-request.ts";
 import type { DataBroadcast } from "./data-surface.ts";
 import type { ApprovalMode } from "./approval-mode.ts";
 import type { ToolScope } from "./tool-scope.ts";
@@ -609,6 +610,8 @@ export interface WireMessage extends HelperIntroField, SetupCardFields, WaitLine
   /** user messages: the Data result the person was viewing when they sent
    * this. `text` stays exactly what they typed. */
   dataContext?: { cardId: string; draftSql?: string };
+  /** Guidance scoped to this user request, not a conversation default. */
+  research?: ResearchRequest;
   /** user messages waiting in the steer-queue while the bot is mid-turn. */
   queued?: boolean;
   /** steer-queue entry this drained user line came from. */
@@ -934,7 +937,7 @@ export type SteerQueueReason = "capacity" | "group-turn";
 
 /** Pending steer-queue chips, as `queuedSteerSnapshot` emits them and the
  * `bot.queued` frame carries them: threadId → queued items. */
-export type BotQueuedMessages = Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason }>>;
+export type BotQueuedMessages = Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason; research?: ResearchRequest }>>;
 
 /** Skills library browse surface: one row per library entry, with the bots
  * currently assigned to it. Version is null for locally imported skills. */

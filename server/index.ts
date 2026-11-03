@@ -1,5 +1,6 @@
 // Import first: it reads a Cloud home's secrets off the launcher's pipe before any module can start a process.
 import { BOOT_CLOUD_SECRETS } from "./cloud-secrets-boot.ts";
+import { promptWithResearchRequest, researchRequestKey, type ResearchRequest } from "../shared/research-request.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync, realpathSync, rmSync } from "node:fs";
@@ -1677,6 +1678,7 @@ const computerSelectionTurns = new Map<string, {
   source: Message;
   text: string;
   dataContext?: DataContext;
+  research?: ResearchRequest;
   mounted?: Surface;
   selected?: Surface;
   previousSurface?: Surface;
@@ -6203,7 +6205,7 @@ function continueComputerSelection(threadId: string, generation: string | undefi
     if (store.activePath(threadId).findLast(message => message.role === "user" && message.kind === "text")?.id !== selection.source.id) return;
     store.patchTask(bot.id, threadId, { surface, surfaceSource: "auto" });
     const text = `The computer selection is now ${surfaceLabel(surface)}. Continue the user's original request using the tools mounted for this turn; verify the result before claiming success.\n\n${selection.text}`;
-    void startTurn(bot.id, text, { threadId, userMessage: selection.source, computerSelectionContinuation: true, dataContext: selection.dataContext }).catch(error => {
+    void startTurn(bot.id, text, { threadId, userMessage: selection.source, computerSelectionContinuation: true, dataContext: selection.dataContext, research: selection.research }).catch(error => {
       if (store.taskByThread(bot.id, threadId)) store.appendMessage(threadId, { role: "bot", kind: "activity",
         tool: { name: `Could not continue on ${surfaceLabel(surface)}: ${error instanceof Error ? error.message : String(error)}`, ok: false } });
     });
@@ -7301,7 +7303,7 @@ function drainQueuedSendsNow() {
   );
 }
 
-async function startOrQueueDirectMessage(botId: string, threadId: string, text: string, replyTo?: ReplyTarget, sendId?: string, sender?: ResolvedSender, trigger?: UsageTrigger, via?: "call", callId?: string, dataContext?: DataContext, app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] }) {
+async function startOrQueueDirectMessage(botId: string, threadId: string, text: string, replyTo?: ReplyTarget, sendId?: string, sender?: ResolvedSender, trigger?: UsageTrigger, via?: "call", callId?: string, dataContext?: DataContext, app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] }, research?: ResearchRequest) {
   const decision = admit("direct", {}, {
     atCapacity: botAtThreadCapacity(botId, threadId),
     threadBusy: threadBusy(botId, threadId),
@@ -7312,9 +7314,9 @@ async function startOrQueueDirectMessage(botId: string, threadId: string, text: 
     const queued = queueSteeredMessage(botId, threadId, text, {
       replyToId: replyTo?.id,
       sendId,
-      dataContext, fromApp: app?.fromApp,
+      dataContext, research, fromApp: app?.fromApp,
       reason: decision.reason,
-      prompt: (app?.context ?? "") + promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId)),
+      prompt: promptWithResearchRequest((app?.context ?? "") + promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId)), research),
       sender,
       trigger,
       via,
@@ -7323,7 +7325,7 @@ async function startOrQueueDirectMessage(botId: string, threadId: string, text: 
     });
     return { ok: true as const, queued: true as const, queueId: queued.id, threadId, reason: decision.reason };
   }
-  const message = await startTurn(botId, text, { threadId, replyTo, sendId, sender, trigger, via, callId, dataContext, app, allowRoomTurnElsewhere: true });
+  const message = await startTurn(botId, text, { threadId, replyTo, sendId, sender, trigger, via, callId, dataContext, research, app, allowRoomTurnElsewhere: true });
   return { ok: true as const, threadId, message };
 }
 
@@ -7365,23 +7367,24 @@ async function acceptDirectSend(
     via?: "call";
     callId?: string;
     dataContext?: DataContext;
+    research?: ResearchRequest;
     personPresent: boolean;
     app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] };
   },
   guardedStart?: (currentAtStart: BotRecord) => Promise<DirectSendReceipt>,
 ): Promise<DirectSendReceipt> {
-  const { botId, threadId, text, sendId, replyTo, sender, trigger, via, callId, dataContext, personPresent, app } = input;
+  const { botId, threadId, text, sendId, replyTo, sender, trigger, via, callId, dataContext, research, personPresent, app } = input;
   const refused = directSendRefusal(botId, threadId);
   if (refused) throw refused;
   return sendSequencer.run(
     sendId ? `bot:${botId}:${threadId}:${sendId}` : undefined,
-    sendFingerprint(text, replyTo?.id),
+    sendFingerprint(text, replyTo?.id, undefined, research),
     async (): Promise<DirectSendReceipt> => {
       if (sendId) {
         if (cancelledChatFollowup("bot", botId, threadId, sendId)) {
           throw Object.assign(new Error("this queued sendId was cancelled; send a new message to try again"), { status: 409 });
         }
-        const accepted = acceptedSendMatch(store.messagesFor(threadId), sendId, text, replyTo?.id);
+        const accepted = acceptedSendMatch(store.messagesFor(threadId), sendId, text, replyTo?.id, undefined, research);
         if (accepted.kind === "conflict") {
           throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
         }
@@ -7397,7 +7400,7 @@ async function acceptDirectSend(
         }
         const queued = queuedSteeredMessage(botId, threadId, sendId);
         if (queued) {
-          if (queued.text !== text || queued.replyToId !== replyTo?.id) {
+          if (queued.text !== text || queued.replyToId !== replyTo?.id || researchRequestKey(queued.research) !== researchRequestKey(research)) {
             throw Object.assign(new Error("sendId already belongs to another message"), { status: 409 });
           }
           return { ok: true as const, queued: true as const, queueId: queued.id, threadId, reason: queued.reason };
@@ -7424,7 +7427,7 @@ async function acceptDirectSend(
       if (currentAtStart.busy) {
         const typedStop = await stopOnTypedCommand({ botId, threadId, text, trigger, personPresent, fromApp: Boolean(app), row: { replyToId: replyTo?.id, sendId, sender, ...spokenLineFields(via, callId) } });
         if (typedStop) return typedStop;
-        const personsOwn = personPresent && !app && (trigger.kind === "user" || trigger.kind === "owner"), queuedPrompt = (app?.context ?? "") + promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId));
+        const personsOwn = personPresent && !app && (trigger.kind === "user" || trigger.kind === "owner"), queuedPrompt = promptWithResearchRequest((app?.context ?? "") + promptWithReply(promptWithDataContext(text, dataContext), replyTo, userNameFor(threadId)), research);
         const instance = runningTurnInstance(currentAtStart, threadId);
         let steered: SteerOutcome = "refused";
         const steerInput = extractTurnImages(text, { pdfPages: true });
@@ -7437,7 +7440,7 @@ async function acceptDirectSend(
           engineCanSteer: Boolean(instance?.adapter.capabilities.queueing && instance.adapter.steer),
         });
         if (busyAdmission.action === "steer" && instance?.adapter.steer) {
-          const prompt = (app?.context ?? "") + promptWithReply(promptWithDataContext(steerInput.text, dataContext), replyTo, userNameFor(threadId));
+          const prompt = promptWithResearchRequest((app?.context ?? "") + promptWithReply(promptWithDataContext(steerInput.text, dataContext), replyTo, userNameFor(threadId)), research);
           steered = await (steerInput.images.length > 0
             ? instance.adapter.steer(threadId, prompt, steerInput.images)
             : instance.adapter.steer(threadId, prompt))
@@ -7465,6 +7468,7 @@ async function acceptDirectSend(
             text,
             replyToId: replyTo?.id,
             sendId,
+            ...(research ? { research } : {}),
             ...(dataContext ? { dataContext } : {}), ...(app?.fromApp ? { fromApp: app.fromApp } : {}),
             steered: true,
             sender,
@@ -7473,16 +7477,16 @@ async function acceptDirectSend(
           store.setTaskAskedAt(botId, threadId, message.at);
           handoffs.steered(threadId, steerTarget, instance?.instanceId, message.id);
           signInSettle.answerInChat(botId, threadId);
-          if (personsOwn) personFirst.wait(threadId, { requeue: (note) => void queueSteeredMessage(current.id, threadId, text, { prompt: note ? `${queuedPrompt}\n\n${note}` : queuedPrompt, rowId: message.id, first: true, queuedAt: message.at, replyToId: replyTo?.id, dataContext, sender, trigger, via, callId }) });
+          if (personsOwn) personFirst.wait(threadId, { requeue: (note) => void queueSteeredMessage(current.id, threadId, text, { prompt: note ? `${queuedPrompt}\n\n${note}` : queuedPrompt, rowId: message.id, first: true, queuedAt: message.at, replyToId: replyTo?.id, dataContext, research, sender, trigger, via, callId }) });
           return { ok: true as const, steered: true as const, threadId, message };
         }
         if (!current.busy) {
-          return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app);
+          return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, research);
         }
         const queued = queueSteeredMessage(current.id, threadId, text, {
           replyToId: replyTo?.id,
           sendId,
-          dataContext, fromApp: app?.fromApp,
+          dataContext, research, fromApp: app?.fromApp,
           prompt: queuedPrompt,
           sender,
           trigger,
@@ -7493,7 +7497,7 @@ async function acceptDirectSend(
         if (personsOwn) personFirst.wait(threadId, {});
         return { ok: true as const, queued: true as const, queueId: queued.id, threadId };
       }
-      return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app);
+      return startOrQueueDirectMessage(botId, threadId, text, replyTo, sendId, sender, trigger, via, callId, dataContext, app, research);
     },
   );
 }
@@ -7689,6 +7693,7 @@ async function startTurn(
     via?: "call"; callId?: string;
     relayed?: boolean;
     dataContext?: DataContext;
+    research?: ResearchRequest;
     app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] };
     onDispatchError?: (message: string) => void;
     compactOnly?: boolean;
@@ -7828,6 +7833,7 @@ async function startTurn(
           replyToId: opts?.replyTo?.id,
           reaction: opts?.replyTo?.reactedWith,
           sendId: opts?.sendId,
+          ...(opts?.research ? { research: opts.research } : {}),
           ...(opts?.dataContext ? { dataContext: opts.dataContext } : {}), ...(opts?.app?.fromApp ? { fromApp: opts.app.fromApp } : {}), ...(opts?.app?.pointed ? { pointed: opts.app.pointed } : {}),
           peerAsk: opts?.peerAsk,
           sender: opts?.sender,
@@ -7904,7 +7910,7 @@ async function startTurn(
   if (!opts?.computerSelectionContinuation && !opts?.cardContinuation && !opts?.automationSource && !opts?.unattended &&
       !opts?.commsDepth && !opts?.coordination && !inheritedTeamComputer(bot) && bot.computer !== "off" && agentsMounted) {
     const source = store.activePath(threadId).findLast(message => message.id === userMessage?.id && message.role === "user" && !message.peerAsk);
-    if (source) computerSelectionTurns.set(threadId, { generation: dispatchClaimId, botId: bot.id, source, text, dataContext: opts?.dataContext });
+    if (source) computerSelectionTurns.set(threadId, { generation: dispatchClaimId, botId: bot.id, source, text, dataContext: opts?.dataContext, research: opts?.research });
   }
   store.setTaskActivity(bot.id, threadId, "working");
   // Watch from admission, not dispatch: a turn can wedge in setup long before any provider event exists.
@@ -7990,11 +7996,11 @@ async function startTurn(
         ? skillsHost.expandSkillCommand(bot, threadId, providerText, instance)
         : providerText;
       const setupText = agentsMounted ? expandSetupTurnText(skillCommandText) : skillCommandText;
-      const userTurnText = (opts?.app?.context ?? "") + withReactionNotes(promptWithReply(
+      const userTurnText = promptWithResearchRequest((opts?.app?.context ?? "") + withReactionNotes(promptWithReply(
         skillAuthoring ? expandLearnTurnText(setupText) : setupText,
         opts?.replyTo,
         userNameFor(threadId),
-      ), personLine ? activeMessages : [], skipTranscript, userNameFor(threadId));
+      ), personLine ? activeMessages : [], skipTranscript, userNameFor(threadId)), opts?.research);
       const replay = usesNativeImageInput
         ? extractReplayImages(selection.inline, turnImages, { pdfPages: true })
         : { transcript: selection.inline, images: [] };

@@ -65,6 +65,9 @@ import { goalCoordinatorForComposer, openTaskWorking, roomRespondersForComposer 
 import { sendLabels, SIMPLE_CONTROL, slotColors } from "./composer-simple";
 import { PendingApprovalActions, PendingApprovalPanel, pendingApprovals } from "./PendingApproval";
 import { ComposerDictationButton } from "./ComposerDictationButton";
+import { ResearchRequestBar } from "./ResearchRequestBar";
+import { setDraftResearch, useDraftResearch } from "@/lib/research-draft";
+import { researchCommand, typedResearchCommand } from "@/lib/research-commands";
 import { GeminiLiveConversation } from "./GeminiLiveConversation";
 import { useGeminiVoiceConfigured } from "@/lib/use-gemini-configured";
 import { ApprovalChip, ComposerPlusMenu, GoalToggle } from "./ComposerPlusMenu";
@@ -169,6 +172,7 @@ export function Composer({
   const attachmentPending = useDraftAttachmentPending(draftId);
   const failedSends = useFailedComposerSends(draftId);
   const [channelMode, setChannelMode] = useComposerChannelMode(draftId);
+  const [research, setResearch] = useDraftResearch(draftId);
   const editText = useCallback(
     (next: string) => {
       markDraftEdited(draftId);
@@ -298,7 +302,9 @@ export function Composer({
     return responders.length > 0 && responders.every(botSupportsImages);
   };
   const typedGoalText = !group?.dm ? goalTextFromComposer(text) : null;
-  const effectiveText = typedGoalText ?? text;
+  const typedResearch = !group ? typedResearchCommand(text) : null;
+  const requestResearch = typedResearch?.research ?? research;
+  const effectiveText = typedGoalText ?? typedResearch?.text ?? text;
   const effectiveChannelMode = typedGoalText !== null ? "goal" : channelMode;
   const engineSupportsImages = imageTargetsSupport(effectiveText, effectiveChannelMode);
 
@@ -329,6 +335,9 @@ export function Composer({
       id: "setup",
       label: "/setup",
       description: t("composer.command.setupDesc"),
+    });
+    if (!group) for (const id of ["research", "verify", "report"] as const) available.push({
+      kind: "command", id, label: `/${id}`, description: t(`research.command.${id}`),
     });
     available.push(...skillSlashCommands(slashSkills));
     return available.filter((command) => slashCommandMatches(command, slash.query));
@@ -393,6 +402,9 @@ export function Composer({
 
   const pickCommand = (command: ComposerSlashCommand | undefined) => {
     if (!slash || !command) return;
+    const researchPick = command.kind === "command" ? researchCommand(command.id) : null;
+    if (researchPick) { setResearch(researchPick); markDraftEdited(draftId); }
+    else if (command.kind === "command" && command.id === "goal") setResearch(null);
     const replacement = command.kind === "skill" ? `${command.label} `
       : command.id === "learn" ? "/learn " : command.id === "setup" ? "/setup " : "";
     const next = replaceComposerSlashTrigger(text, slash, replacement);
@@ -454,6 +466,7 @@ export function Composer({
       const cited = splitTranscriptCitations(queued.text);
       if (cited.display) prependComposerDraft(targetDraftId, cited.display);
       appendDraftAttachments(targetDraftId, cited.citations);
+      setDraftResearch(targetDraftId, queued.research ?? null);
       if (targetDraftId !== draftIdRef.current) return;
       requestAnimationFrame(() => {
         const input = inputRef.current;
@@ -550,6 +563,7 @@ export function Composer({
       text: failed.requestText,
       replyToId: failed.replyToId,
       threadId: failed.threadId,
+      ...(failed.research ? { research: failed.research } : {}),
       onError: () => {
         rememberFailedComposerSend(draftId, {
           sendId: failed.sendId,
@@ -558,6 +572,7 @@ export function Composer({
           replyToId: failed.replyToId,
           threadId: failed.threadId,
           channelMode: failed.channelMode,
+          research: failed.research,
         });
       },
     };
@@ -569,6 +584,10 @@ export function Composer({
   };
   const send = () => {
     if (locked || attachmentPending) return;
+    if (requestResearch && (group || effectiveChannelMode === "goal")) {
+      dispatch({ type: "error", message: t("research.unsupported") });
+      return;
+    }
     if (
       attachments.some((attachment) => attachment.kind === "image") &&
       !imageTargetsSupport(effectiveText, effectiveChannelMode)
@@ -592,6 +611,7 @@ export function Composer({
       replyToId: replyTo?.id,
       threadId,
       channelMode: effectiveChannelMode,
+      research: requestResearch,
     };
     if (group) {
       dispatch({
@@ -610,6 +630,7 @@ export function Composer({
       dispatch({
         type: "send", botId: bot.id, text: body, sendId: sentDraft.sendId, replyToId: replyTo?.id, threadId, dataContext, mode: effectiveChannelMode,
         ...(points ? { pointed: points.pointed } : {}),
+        ...(requestResearch ? { research: requestResearch } : {}),
         onError: () => { points?.restore(); restoreDraft(sentDraft); },
       });
       directMessageSent(state.instances, bot.modelSelection?.instanceId, busy && !canSteer);
@@ -618,6 +639,7 @@ export function Composer({
     setAttachments([]);
     onConsumeReply?.();
     setChannelMode("chat");
+    setResearch(null);
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -790,6 +812,11 @@ export function Composer({
           />
         <div ref={shellRef} data-tour="composer" data-multiline={multiline ? "" : undefined} className={cn("@container/composer relative z-[1] [&_[data-composer-plus]]:ring-0", singleRow ? cn("rounded-[26px] px-2 py-1.5", ELEVATED_FLOAT) : simpleDock ? cn(SIMPLE_COMPOSER, multiline ? "rounded-[18px]" : "rounded-[22px]") : cn("rounded-2xl px-2 py-1.5", ELEVATED_FLOAT))}>
         <div className="contents">
+        {!group && requestResearch && <ResearchRequestBar value={requestResearch} onChange={(value) => {
+          markDraftEdited(draftId);
+          if (typedResearch) editText(typedResearch.text);
+          setResearch(value);
+        }} />}
         {replyTo && <ComposerReplyStrip message={replyTo} fallbackName={bot?.name} onClear={onClearReply} />}
         <div data-composer-row className={cn("flex items-end", simpleDock ? "gap-1.5" : "gap-1", advanced && !singleRow && "@max-[30rem]/composer:flex-wrap")}>
         {singleRow && !locked && (

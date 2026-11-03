@@ -131,6 +131,7 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "digest" | "compaction" | "call" | "widget" | "app";
   text?: string;
   digest?: TurnDigest;
+  research?: import("../../shared/research-request").ResearchRequest;
   compaction?: import("../../shared/wire").WireMessage["compaction"];
   attachments?: import("../../shared/wire").WireMessage["attachments"];
   card?: OptionCardData;
@@ -627,7 +628,7 @@ export interface AppState {
     nonce: number;
     kind: Exclude<MausMotion, "none">;
   } | null;
-  pendingQueued: Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason }>>;
+  pendingQueued: Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason; research?: import("../../shared/research-request").ResearchRequest }>>;
   consumedQueueIds: Record<string, true>;
   backgroundThreadEvents: Record<string, Array<Extract<Action, { type: "messageAdded" | "messagePatched" | "threadActive" | "optimisticMessageRemoved" }>>>;
   loadingOlder: Record<string, true>;
@@ -690,6 +691,7 @@ export type Action =
       type: "sendGroup";
       groupId: string;
       text: string;
+      research?: import("../../shared/research-request").ResearchRequest;
       sendId?: string;
       replyToId?: string;
       threadId?: string;
@@ -721,13 +723,14 @@ export type Action =
       type: "send";
       botId: string;
       text: string;
+      research?: import("../../shared/research-request").ResearchRequest;
       sendId?: string;
       replyToId?: string;
       threadId?: string;
       dataContext?: import("../../shared/data-context").DataContext; pointed?: import("../../shared/app-frame/point").PointedElement[]; mode?: "chat" | "goal";
       onError?: () => void;
     }
-  | { type: "pendingQueued"; threadId: string; queueId: string; text: string; reason?: SteerQueueReason }
+  | { type: "pendingQueued"; threadId: string; queueId: string; text: string; reason?: SteerQueueReason; research?: import("../../shared/research-request").ResearchRequest }
   | { type: "consumePendingQueued"; threadId: string; queueId: string }
   | { type: "cancelQueued"; botId: string; queueId: string; threadId?: string; onCancelled?: () => void }
   | { type: "steerQueued"; botId: string; queueId: string; threadId?: string; onError?: () => void; onSettled?: () => void }
@@ -1646,7 +1649,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         pendingQueued: {
           ...state.pendingQueued,
-          [action.threadId]: [...prev, { queueId: action.queueId, text: action.text, ...(action.reason ? { reason: action.reason } : {}) }],
+          [action.threadId]: [...prev, { queueId: action.queueId, text: action.text, ...(action.reason ? { reason: action.reason } : {}), ...(action.research ? { research: action.research } : {}) }],
         },
       };
     }
@@ -1704,6 +1707,7 @@ export function reducer(state: AppState, action: Action): AppState {
         action.replyToId,
         bot.activeLeafId,
       );
+      message.research = action.research;
       message.optimisticThreadOrderAt = bot.tasks?.find((task) => task.threadId === threadId)?.lastThreadOrderAt;
       return bumpThreadUpdatedAt(updateBot(animated, bot.id, (current) => ({
         ...current,
@@ -2461,7 +2465,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           void waitForExecutionSettings(botBeforeSend ? [botBeforeSend] : [], threadId)
             .then(() => sendReconciled(() => api(`/api/bots/${action.botId}/messages`, {
                 method: "POST",
-                body: JSON.stringify({ text: action.text, replyToId: action.replyToId, threadId, sendId, ...(action.dataContext ? { dataContext: action.dataContext } : {}), ...(action.pointed?.length ? { pointed: action.pointed } : {}), ...(action.mode === "goal" ? { mode: "goal" } : {}) }),
+                body: JSON.stringify({ text: action.text, replyToId: action.replyToId, threadId, sendId, ...(action.research ? { research: action.research } : {}), ...(action.dataContext ? { dataContext: action.dataContext } : {}), ...(action.pointed?.length ? { pointed: action.pointed } : {}), ...(action.mode === "goal" ? { mode: "goal" } : {}) }),
               }), arrived))
             .then((sent) => {
               if (!("body" in sent)) return;
@@ -2485,6 +2489,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                   queueId: body.queueId,
                   text: action.text,
                   reason: body.reason === "capacity" || body.reason === "group-turn" ? body.reason : undefined,
+                  ...(action.research ? { research: action.research } : {}),
                 });
               }
             })
@@ -2712,6 +2717,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 threadId,
                 sendId,
                 mode: action.mode ?? "chat",
+                ...(action.research ? { research: action.research } : {}),
               }),
             }))
             .then((body) => {

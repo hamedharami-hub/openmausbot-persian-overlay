@@ -49,6 +49,16 @@ describe("send idempotency", () => {
     expect(sendFingerprint("ship it", undefined, "goal")).not.toBe(sendFingerprint("ship it", undefined, "chat"));
   });
 
+  it("includes research settings in persisted and concurrent send identity", () => {
+    const research = { mode: "research", depth: "deep", length: "short" } as const;
+    const message = userMessage({ research });
+    expect(acceptedSendMatch([message], message.sendId!, "ship it", undefined, undefined, research).kind).toBe("match");
+    expect(acceptedSendMatch([message], message.sendId!, "ship it").kind).toBe("conflict");
+    expect(acceptedSendMatch([message], message.sendId!, "ship it", undefined, undefined, { ...research, length: "long" }).kind).toBe("conflict");
+    expect(sendFingerprint("ship it", undefined, undefined, research)).not.toBe(sendFingerprint("ship it"));
+    expect(sendFingerprint("ship it", undefined, undefined, research)).toBe(sendFingerprint("ship it", undefined, undefined, { length: "short", mode: "research", depth: "deep" }));
+  });
+
   it("treats a legacy missing channel mode as ordinary chat", () => {
     const sendId = "send_1234567890123456";
     const message = userMessage();

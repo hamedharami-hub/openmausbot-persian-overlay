@@ -26,6 +26,7 @@ interface QueueEntry {
     replyToId?: string;
     sendId?: string;
     dataContext?: Message["dataContext"];
+    research?: Message["research"];
     reason?: SteerQueueReason;
     /** Queued by a bot running unattended: the drained turn inherits it (a queue is a delay, not a person at the keyboard). */
     unattended?: boolean;
@@ -84,11 +85,11 @@ const changed = () => {
 
 /** Public pending chips only: never expose provider prompts or reply context. */
 export function queuedSteerSnapshot(ownsThread: (botId: string, threadId: string) => boolean):
-  Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason }>> {
+  Record<string, Array<{ queueId: string; text: string; reason?: SteerQueueReason; research?: Message["research"] }>> {
   return Object.fromEntries([...queues]
     .filter(([threadId, entry]) => ownsThread(entry.botId, threadId))
     .map(([threadId, entry]) => [threadId, entry.items.filter((item) => !item.rowId).map((item) => ({
-      queueId: item.messageId, text: item.text, ...(item.reason ? { reason: item.reason } : {}),
+      queueId: item.messageId, text: item.text, ...(item.reason ? { reason: item.reason } : {}), ...(item.research ? { research: item.research } : {}),
     }))]));
 }
 
@@ -105,7 +106,7 @@ export function queueSteeredMessage(
   botId: string,
   threadId: string,
   text: string,
-  options: { prompt?: string; replyToId?: string; sendId?: string; dataContext?: Message["dataContext"]; reason?: SteerQueueReason; unattended?: boolean; peerAsk?: Message["peerAsk"]; origin?: WorkOrigin; sender?: ResolvedSender; trigger?: UsageTrigger; callId?: string; via?: "call"; reaction?: string; fromApp?: Message["fromApp"]; relay?: Message["relay"]; rowId?: string; first?: boolean; queuedAt?: number } = {},
+  options: { prompt?: string; replyToId?: string; sendId?: string; research?: Message["research"]; dataContext?: Message["dataContext"]; reason?: SteerQueueReason; unattended?: boolean; peerAsk?: Message["peerAsk"]; origin?: WorkOrigin; sender?: ResolvedSender; trigger?: UsageTrigger; callId?: string; via?: "call"; reaction?: string; fromApp?: Message["fromApp"]; relay?: Message["relay"]; rowId?: string; first?: boolean; queuedAt?: number } = {},
 ): QueuedSteer {
   const id = newId();
   const entry = queues.get(threadId) ?? { botId, items: [] };
@@ -117,6 +118,7 @@ export function queueSteeredMessage(
     replyToId: options.replyToId,
     sendId: options.sendId,
     dataContext: options.dataContext,
+    ...(options.research ? { research: options.research } : {}),
     reason: options.reason,
     unattended: options.unattended,
     peerAsk: options.peerAsk,
@@ -206,6 +208,7 @@ export function drainSteeredMessages(
           replyToId: item.replyToId,
           sendId: item.sendId,
           ...(item.dataContext ? { dataContext: item.dataContext } : {}),
+          ...(item.research ? { research: item.research } : {}),
           queueId: item.messageId,
           peerAsk: item.peerAsk,
           sender: item.sender,

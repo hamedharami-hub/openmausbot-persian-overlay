@@ -436,6 +436,9 @@ const Bubble = memo(function Bubble({
 
   return (
     <div {...{ [MESSAGE_ROW]: "" }} data-message-role={user ? "user" : "assistant"} className={cn("group flex w-full flex-col", user ? "animate-msg-in items-end" : "items-start", simple && join?.above && SIMPLE_STACKED)}>
+      {user && message.research && <div data-research-label className="mb-1 px-2 text-[11px] text-ink-secondary" dir="auto">
+        {t(`research.mode.${message.research.mode}`)} · {t(`research.depth.${message.research.depth}`)} · {t(`research.length.${message.research.length}`)}
+      </div>}
       {message.relay ? <RelayLabel message={message} /> : peer && <PeerLabel peer={peer} />}
       {speaker && <div className="mb-0.5 px-1 text-[12px] font-medium text-ink-secondary">{speaker}</div>}
       <div data-message-line="" className={cn("flex w-full items-center gap-1.5", user ? "justify-end" : "justify-start")}>

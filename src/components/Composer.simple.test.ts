@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Group } from "@/state/store";
 import { restoreComposerDraft } from "@/lib/drafts";
+import { getDraftResearch, setDraftResearch } from "@/lib/research-draft";
 import { setCallMode } from "@/lib/call-mode";
 import { BOT_BUTTON, botButtonTone } from "@/lib/bot-button";
 
@@ -89,7 +90,7 @@ beforeEach(() => {
   fixture.groupCall = null;
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
   vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
-  for (const id of [`bot:${bot.id}:${bot.threadId}`, `group:${room.id}:${room.threadId}`]) restoreComposerDraft(id, { text: "", attachments: [] });
+  for (const id of [`bot:${bot.id}:${bot.threadId}`, `group:${room.id}:${room.threadId}`]) restoreComposerDraft(id, { text: "", attachments: [], research: null });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -104,6 +105,24 @@ afterEach(() => {
 });
 
 describe("the Simple composer in a bot chat", () => {
+  it("sends typed research as request metadata without changing the user text", () => {
+    restoreComposerDraft(`bot:${bot.id}:${bot.threadId}`, { text: "/research Check current dates", attachments: [] });
+    render({ bot });
+    expect(container.querySelector("[data-research-request]")).not.toBeNull();
+    click(sendButton());
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "send", text: "Check current dates", research: { mode: "research", depth: "deep", length: "normal" } }));
+    expect(getDraftResearch(`bot:${bot.id}:${bot.threadId}`)).toBeNull();
+  });
+
+  it("allows deep research with a short answer and resets it after send", () => {
+    const id = `bot:${bot.id}:${bot.threadId}`;
+    restoreComposerDraft(id, { text: "Find sources", attachments: [] });
+    setDraftResearch(id, { mode: "verify", depth: "deep", length: "short" });
+    render({ bot });
+    click(sendButton());
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "send", text: "Find sources", research: { mode: "verify", depth: "deep", length: "short" } }));
+    expect(container.querySelector("[data-research-request]")).toBeNull();
+  });
   it("is one pill: a round + with three rows, the field, and one round button in the bot's tone", () => {
     render({ bot });
     expect(plus()?.getAttribute("aria-label")).toBe("Add");

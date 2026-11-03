@@ -7,7 +7,7 @@ import { isSkillName } from "./skill-md.ts";
 
 /** Commands the app already owns. A skill with one of these names keeps
  * working through the prompt index, but `/name` stays the built-in. */
-export const BUILT_IN_SLASH_COMMANDS: readonly string[] = ["goal", "learn", "setup"];
+export const BUILT_IN_SLASH_COMMANDS: readonly string[] = ["goal", "learn", "setup", "research", "verify", "report"];
 
 export interface SkillCommand {
   name: string;

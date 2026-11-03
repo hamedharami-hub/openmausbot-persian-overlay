@@ -1,3 +1,4 @@
+import { researchRequestKey, type ResearchRequest } from "../shared/research-request.ts";
 import type { Message } from "./store.ts";
 import { z } from "zod";
 
@@ -22,6 +23,7 @@ export function acceptedSendMatch(
   text: string,
   replyToId?: string,
   channelMode?: "chat" | "goal",
+  research?: ResearchRequest,
 ): AcceptedSendMatch {
   const message = messages.find((candidate) => candidate.sendId === sendId);
   if (!message) return { kind: "none" };
@@ -30,7 +32,8 @@ export function acceptedSendMatch(
     message.kind !== "text" ||
     message.text !== text ||
     message.replyToId !== replyToId ||
-    (message.channelMode ?? "chat") !== (channelMode ?? "chat")
+    (message.channelMode ?? "chat") !== (channelMode ?? "chat") ||
+    researchRequestKey(message.research) !== researchRequestKey(research)
   ) {
     return { kind: "conflict" };
   }
@@ -65,6 +68,6 @@ export class SendSequencer {
   }
 }
 
-export function sendFingerprint(text: string, replyToId?: string, channelMode?: "chat" | "goal"): string {
-  return JSON.stringify([text, replyToId ?? null, channelMode ?? null]);
+export function sendFingerprint(text: string, replyToId?: string, channelMode?: "chat" | "goal", research?: ResearchRequest): string {
+  return JSON.stringify([text, replyToId ?? null, channelMode ?? null, researchRequestKey(research)]);
 }

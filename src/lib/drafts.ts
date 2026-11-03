@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type SetStateAction } from "react";
 import { isAttachment, type Attachment } from "./composer-attachments.js";
+import type { ResearchRequest } from "../../shared/research-request";
+import { setDraftResearch } from "./research-draft";
 
 const KEY = "omb-drafts";
 const ATTACHMENTS_KEY = "omb-draft-attachments";
@@ -9,7 +11,7 @@ const CHANNEL_MODES_KEY = "omb-draft-channel-modes";
 const draftRevisions = new Map<string, number>();
 const replyDrafts = new Map<string, string>();
 type ChannelMode = "chat" | "goal";
-type DraftRestore = { text: string; attachments: Attachment[]; channelMode?: ChannelMode };
+type DraftRestore = { text: string; attachments: Attachment[]; channelMode?: ChannelMode; research?: ResearchRequest | null };
 type DraftRestoreListener = (draft: DraftRestore) => void;
 const restoreListeners = new Map<string, Set<DraftRestoreListener>>();
 const channelModeListeners = new Map<string, Set<() => void>>();
@@ -23,6 +25,7 @@ export interface FailedComposerSend {
   replyToId?: string;
   threadId: string;
   channelMode?: "chat" | "goal";
+  research?: ResearchRequest | null;
 }
 type FailedComposerSendInput = Omit<FailedComposerSend, "id">;
 export interface ComposerSendSnapshot extends FailedComposerSendInput {
@@ -295,6 +298,7 @@ export function restoreComposerDraft(id: string, draft: DraftRestore): void {
   setDraft(store, id, draft.text);
   setDraftAttachments(store, id, draft.attachments);
   setDraftChannelMode(store, id, draft.channelMode ?? "chat");
+  if ("research" in draft) setDraftResearch(id, draft.research ?? null);
   for (const listener of restoreListeners.get(id) ?? []) listener(draft);
 }
 
@@ -425,6 +429,7 @@ export function recoverFailedComposerSend(sent: ComposerSendSnapshot): "restored
       replyToId: sent.replyToId,
       threadId: sent.threadId,
       channelMode: sent.channelMode,
+      research: sent.research,
     });
     return "outbox";
   }
@@ -433,6 +438,7 @@ export function recoverFailedComposerSend(sent: ComposerSendSnapshot): "restored
     text: sent.text,
     attachments: sent.attachments,
     channelMode: sent.channelMode,
+    research: sent.research ?? null,
   });
   // The response may have vanished after the server accepted it: the next Send reuses this identity.
   const retry = { sendId: sent.sendId, requestText: sent.requestText };

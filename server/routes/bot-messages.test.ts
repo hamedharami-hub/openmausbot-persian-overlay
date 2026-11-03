@@ -161,6 +161,27 @@ async function fixture() {
   return { store, bot, threadId, state, post, edit, cancelQueued, show, row, sent, patches: vi.spyOn(store, "patchMessage") };
 }
 
+describe("research send transport", () => {
+  it("passes validated settings separately from original text", async () => {
+    const f = await fixture();
+    const research = { mode: "verify", depth: "deep", length: "short" };
+    expect((await f.post({ text: "Check this claim", research })).status).toBe(202);
+    expect(f.state.accepted[0]).toMatchObject({ text: "Check this claim", research });
+  });
+
+  it("rejects malformed and unsupported research before acceptance", async () => {
+    const f = await fixture();
+    const research = { mode: "report", depth: "standard", length: "long" };
+    for (const body of [
+      { text: "hello", research: null },
+      { text: "hello", research: { ...research, extra: "instructions" } },
+      { text: "hello", research, mode: "goal" },
+      { text: "hello", research, widgetAction: {} },
+    ]) expect((await f.post(body)).status).toBe(400);
+    expect(f.state.accepted).toHaveLength(0);
+  });
+});
+
 describe("POST /api/bots/:id/messages with widgetAction", () => {
   it("lets the server answer a press on its own card with no turn, refuses it for someone else, and reads no widget in another bot's chat", async () => {
     const { store, threadId, state, post, show, sent } = await fixture();

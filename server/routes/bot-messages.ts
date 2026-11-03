@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ServerResponse } from "node:http";
 import { z } from "zod";
 
+import { researchRequestSchema, type ResearchRequest } from "../../shared/research-request.ts";
 import { approvalModeFor } from "../../shared/approval-mode.ts";
 import { isPersistentQuestionCard } from "../../shared/ask-question.ts";
 import { normalizeReaction, reactionAnswer } from "../../shared/reactions.ts";
@@ -66,7 +67,7 @@ export interface BotMessageRouteDeps {
   acceptDirectSend(
     input: {
       botId: string; threadId: string; text: string; sendId?: string; replyTo?: Message; sender?: ResolvedSender;
-      trigger: UsageTrigger; dataContext?: DataContext; personPresent: boolean;
+      trigger: UsageTrigger; dataContext?: DataContext; research?: ResearchRequest; personPresent: boolean;
       app?: { context?: string; fromApp?: Message["fromApp"]; pointed?: Message["pointed"] };
     },
     guardedStart?: (currentAtStart: BotRecord) => Promise<DirectSendReceipt>,
@@ -74,7 +75,7 @@ export interface BotMessageRouteDeps {
   directSendRefusal(botId: string, threadId: string): { status: number; body: Record<string, unknown> } | null;
   startTurn(botId: string, text: string, opts?: {
     threadId?: string; replyTo?: Message; sendId?: string; sender?: ResolvedSender; trigger?: UsageTrigger; relayed?: boolean;
-    dataContext?: DataContext; compactOnly?: boolean; cardContinuation?: boolean; editedMessageId?: string;
+    dataContext?: DataContext; research?: ResearchRequest; compactOnly?: boolean; cardContinuation?: boolean; editedMessageId?: string;
   }): Promise<Message>;
   usageTriggerFor(auth: RequestAuth): UsageTrigger;
   messageSender(auth: RequestAuth): ResolvedSender | undefined;
@@ -147,6 +148,7 @@ const guardedSendSchema = z.object({
   sendId: z.string().regex(/^[A-Za-z0-9_-]{16,80}$/),
   text: z.string().min(1).optional(),
   reaction: z.string().max(64).optional(),
+  research: researchRequestSchema.optional(),
   expectedActiveLeafId: z.string().regex(/^[\w-]+$/).nullable(),
   expectedApprovalMode: z.enum(["ask", "full"]).optional(),
   replyToId: z.string().optional(),
@@ -183,6 +185,12 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       const body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return json(res, 400, { error: "body must be a JSON object" });
+      }
+      const parsedResearch = researchRequestSchema.optional().safeParse(body.research);
+      if (!parsedResearch.success) return json(res, 400, { error: "research must specify mode (research, verify, report), depth (standard, deep), and length (short, normal, long)" });
+      const research = parsedResearch.data;
+      if (research && (body.mode === "goal" || body.widgetAction != null || body.appMessage != null || body.reaction != null)) {
+        return json(res, 400, { error: "research is supported only on typed chat messages" });
       }
       const pressed = body.widgetAction !== undefined && body.widgetAction !== null;
       if (guarded && pressed) return json(res, 400, { error: "guarded sends cannot answer a widget" });
@@ -255,8 +263,8 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       const text = press ? press.text : appSent ? appSent.text : typed;
       const target = resolveReplyTarget(threadId, press ? press.messageId : appSent ? appSent.messageId : body.replyToId);
       if (relayed && target?.role !== "bot") return json(res, 400, { error: "a relayed reaction answers a bot's message" });
-      const passedBack = !guarded && !press && !appSent && !pointed && target ? deps.inboxReply?.(auth, threadId, target.id, text, { sendId, sender: messageSender(auth) }) : null;
-      const typedAnswer = passedBack || guarded || press || appSent || pointed ? null : await deps.typedCardAnswer?.(auth, threadId, text, target, { sendId, sender: messageSender(auth) });
+      const passedBack = !research && !guarded && !press && !appSent && !pointed && target ? deps.inboxReply?.(auth, threadId, target.id, text, { sendId, sender: messageSender(auth) }) : null;
+      const typedAnswer = research || passedBack || guarded || press || appSent || pointed ? null : await deps.typedCardAnswer?.(auth, threadId, text, target, { sendId, sender: messageSender(auth) });
       const answeredBack = passedBack ?? typedAnswer;
       if (answeredBack) return json(res, answeredBack.status, answeredBack.message ? { ok: true, threadId, message: answeredBack.message } : { error: answeredBack.error });
       // Only a real press or reaction, or an app's own words, marks the reply; a typed reply to the same row never does, whatever its words.
@@ -304,7 +312,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
             if (guardedAdmission.action === "refuse") {
               throw Object.assign(new Error("wait for a free thread slot before retrying this message"), { status: 409, code: "guarded_busy" });
             }
-            const message = await startTurn(bot.id, text, { threadId, replyTo, sendId, sender, trigger, relayed: true, dataContext });
+            const message = await startTurn(bot.id, text, { threadId, replyTo, sendId, sender, trigger, relayed: true, dataContext, research });
             return { ok: true as const, threadId, message };
           }
         : undefined;
@@ -312,7 +320,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       if (pressKey) pressesInFlight.set(pressKey, sendId);
       try {
         const receipt = await acceptDirectSend({
-          botId: bot.id, threadId, text, sendId, replyTo, sender, trigger, dataContext, ...(app ? { app } : {}),
+          botId: bot.id, threadId, text, sendId, replyTo, sender, trigger, dataContext, research, ...(app ? { app } : {}),
           // The bot's own shell reaches this route on a headless server (loopback is the owner), so only a
           // paired session or the desktop capability proves a person and lifts the webhook block.
           personPresent: auth.kind === "session" || DESKTOP_MANAGED,
@@ -391,6 +399,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
           replyToId: item.replyToId,
           sendId: item.sendId,
           ...(item.dataContext ? { dataContext: item.dataContext } : {}),
+          ...(item.research ? { research: item.research } : {}),
           queueId: item.messageId,
           peerAsk: item.peerAsk,
           steered: true,
@@ -465,7 +474,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       // Before the busy guard: a retried edit's own fork is what is busy.
       const sendId = parseSendId(body.sendId);
       if (sendId) {
-        const accepted = acceptedSendMatch(threadMessages, sendId, text, source.replyToId);
+        const accepted = acceptedSendMatch(threadMessages, sendId, text, source.replyToId, undefined, source.research);
         if (accepted.kind === "conflict" || (accepted.kind === "match" && (accepted.message.parentId ?? null) !== (source.parentId ?? null))) {
           return json(res, 409, { error: "sendId already belongs to another message" });
         }
@@ -488,7 +497,7 @@ export function createBotMessageRoutes(deps: BotMessageRouteDeps): RouteHandler 
       const quoted = source.replyToId ? resolveReplyTarget(bot.threadId, source.replyToId) : undefined;
       const replyTo: ReplyTarget | undefined = quoted && source.reaction && text === source.text ? { ...quoted, reactedWith: source.reaction } : quoted;
       const dataContext = parseDataContext(body.dataContext) ?? (text === source.text ? source.dataContext : undefined);
-      const message = await startTurn(bot.id, text, { threadId: bot.threadId, editedMessageId: messageId, replyTo, sendId, trigger: usageTriggerFor(auth), dataContext,
+      const message = await startTurn(bot.id, text, { threadId: bot.threadId, editedMessageId: messageId, replyTo, sendId, trigger: usageTriggerFor(auth), dataContext, research: source.research,
         ...(CLOUD_HOME ? { sender: messageSender(auth) } : {}) });
       return json(res, 202, { ok: true, message });
     }

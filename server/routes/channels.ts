@@ -306,6 +306,7 @@ export function createChannelRoutes(deps: ChannelRouteDeps): RouteHandler {
     m = path.match(/^\/api\/groups\/([\w-]+)\/messages$/);
     if (m && method === "POST") {
       const body = await readBody(req);
+      if (body?.research !== undefined) return json(res, 400, { error: "research requests are not yet supported in group messages; send directly to a bot" });
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return json(res, 400, { error: "body must be a JSON object" });
       }

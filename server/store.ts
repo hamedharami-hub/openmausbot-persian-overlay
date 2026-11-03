@@ -1263,6 +1263,7 @@ export class Store {
       text,
       parentId: source.parentId ?? null,
       replyToId: source.replyToId,
+      ...(source.research ? { research: source.research } : {}),
       ...(source.reaction && source.text === text ? { reaction: source.reaction } : {}),
       ...(sendId ? { sendId } : {}),
       ...(sender ? { sender } : {}),

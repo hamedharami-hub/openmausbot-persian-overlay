@@ -213,6 +213,7 @@ export interface FollowupPayload {
   replyToId?: string;
   sendId?: string;
   dataContext?: Message["dataContext"];
+  research?: Message["research"];
   reason?: SteerQueueReason;
   unattended?: boolean;
   peerAsk?: Message["peerAsk"];
