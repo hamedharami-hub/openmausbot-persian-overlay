@@ -48,6 +48,7 @@ Use only mapped, tested commands:
 - [Request-scoped research controls](research-request.md)
 - [Research request receipts](research-mission.md)
 - [Browser content observations and answer references](research-content.md)
+- [Bot identity, live state and memory provenance](bot-identity-memory.md)
 - [Conversation context compaction](context-compaction.md)
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)

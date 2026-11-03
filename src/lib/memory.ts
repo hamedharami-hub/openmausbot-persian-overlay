@@ -246,19 +246,23 @@ export function journalSource(row: MemoryJournalRow): string | null {
   if (row.via === "disk") return "changed outside the app";
   if (row.via === "tidy") return "tidy-up";
   if (row.via === "organize") return "filed into topics";
+  if (row.via === "dream") return "dreamed up by the bot from several chats";
+  if (row.via === "move") return "moved with a Cloud transfer";
   if (row.via === "capture") return row.threadTitle ? `noticed in chat “${row.threadTitle}”` : "noticed in a chat";
   if (row.threadTitle) return `from chat “${row.threadTitle}”`;
   if (row.actor === "bot") return "during a task";
-  if (row.via === "ui") return "in Settings";
+  if (row.via === "ui") return "in the memory panel";
   if (row.via === "api") return "through the API";
   return null;
 }
 
-export function journalSourceKey(row: MemoryJournalRow): "memory.source.undo" | "memory.source.disk" | "memory.source.tidy" | "memory.source.organize" | "memory.source.capture" | "memory.source.captureWithTitle" | "memory.source.chat" | "memory.source.task" | "memory.source.settings" | "memory.source.api" | null {
+export function journalSourceKey(row: MemoryJournalRow): "memory.source.undo" | "memory.source.disk" | "memory.source.tidy" | "memory.source.organize" | "memory.source.dream" | "memory.source.move" | "memory.source.capture" | "memory.source.captureWithTitle" | "memory.source.chat" | "memory.source.task" | "memory.source.settings" | "memory.source.api" | null {
   if (row.via === "revert") return "memory.source.undo";
   if (row.via === "disk") return "memory.source.disk";
   if (row.via === "tidy") return "memory.source.tidy";
   if (row.via === "organize") return "memory.source.organize";
+  if (row.via === "dream") return "memory.source.dream";
+  if (row.via === "move") return "memory.source.move";
   if (row.via === "capture") return row.threadTitle ? "memory.source.captureWithTitle" : "memory.source.capture";
   if (row.threadTitle) return "memory.source.chat";
   if (row.actor === "bot") return "memory.source.task";

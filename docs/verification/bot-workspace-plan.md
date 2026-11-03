@@ -4,6 +4,8 @@ Status: approved scope; implementation is incremental. A checked item requires a
 
 Delivered slices: milestone 1 request controls (`research-request.md`); milestone 2a request-linked lifecycle receipts and conservative URL evidence (`research-mission.md`); milestone 2b narrow browser DOM observations and answer references (`research-content.md`). Milestone 2 is not complete: neither a URL reference nor a content observation is a verified claim.
 
+Milestone 3 first slice: `bot-identity-memory.md` (live Now card with real blockers/outcome labels, memory note date/source/expiry badges, journal source labels). Note-level editing, member-layer undo and a structured research-finding memory type remain open.
+
 ## Scope
 
 1. Bot identity: responsibility, tools/access, active work, latest output, blockers.

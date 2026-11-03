@@ -64,6 +64,22 @@ it("on a Team Cloud shows what the bot remembers about the person, from their ow
   expect(host.textContent).not.toContain("durian");
 });
 
+it("shows what each note records, and invents no source for a hand-typed one", async () => {
+  Object.assign(files, { "MEMORY.md": "# Memory\n- 2026-09-25 · from chat \"Launch\" · Prefers morning calls · until 2026-12-01\n- Ada's favourite fruit is durian\n" });
+  await act(async () => root.render(createElement(MemoryPage, { bot, derived: {} as never })));
+  await settle();
+  const facts = [...host.querySelectorAll("[data-memory-note-facts]")].map((row) => row.textContent ?? "");
+  expect(facts).toHaveLength(3);
+  expect(facts[0]).toContain("added 2026-09-25");
+  expect(facts[0]).toContain("from a chat");
+  expect(facts[0]).toContain("2026-12-01");
+  expect(facts[1]).toContain("no source recorded");
+  expect(facts[1]).not.toContain("added");
+  expect(facts[2]).toContain("no source recorded");
+  expect(host.querySelector("[data-memory-note-expired]")).toBeNull();
+  for (const row of host.querySelectorAll("[data-memory-note-facts]")) expect(row.textContent).not.toMatch(/verified|confirms|ستاره/iu);
+});
+
 it("counts those notes on the Library tab", async () => {
   await act(async () => root.render(createElement(LibraryTab, { bot, onOpen: () => {} })));
   await settle();

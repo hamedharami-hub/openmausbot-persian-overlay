@@ -127,7 +127,7 @@ describe("journalSource", () => {
   it("names where the change came from", () => {
     expect(journalSource(row({ threadTitle: "Follow-up" }))).toBe("from chat “Follow-up”");
     expect(journalSource(row())).toBe("during a task");
-    expect(journalSource(row({ actor: "person", via: "ui" }))).toBe("in Settings");
+    expect(journalSource(row({ actor: "person", via: "ui" }))).toBe("in the memory panel");
     expect(journalSource(row({ actor: "person", via: "api" }))).toBe("through the API");
     expect(journalSource(row({ actor: "person", via: "disk" }))).toBe("changed outside the app");
     expect(journalSource(row({ actor: "person", via: "revert" }))).toBe("undo");

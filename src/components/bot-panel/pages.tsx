@@ -21,7 +21,7 @@ import { RoutineList } from "../routines/RoutineList";
 import { BrowserLogins } from "./browser-logins";
 import { useOpenComputer, WherePage } from "./ComputerTab";
 import { SettingsPage } from "./SettingsPage";
-import { panelMemoryNotes, withMemoryNote, withoutMemoryNote, type PanelMemoryNote } from "./memory-notes";
+import { memoryNoteFacts, noteIsExpired, panelMemoryNotes, withMemoryNote, withoutMemoryNote, type PanelMemoryNote } from "./memory-notes";
 import type { SimplePageId } from "./page-registry";
 import { BotSwitch, buttonCls, Card, LinkRow, NoteRow, RadioRow, rowCls, SwitchRow, TextRow, TrashButton } from "./rows";
 import { useMemoryDoc } from "./use-memory-doc";
@@ -186,12 +186,32 @@ export function MemoryPage({ bot }: PageContext) {
           <NoteRow>{t("common.checking")}</NoteRow>
         ) : notes.length === 0 ? (
           <NoteRow>{t("botPanel.memory.empty")}</NoteRow>
-        ) : notes.map((note) => (
+        ) : notes.map((note) => {
+          const facts = memoryNoteFacts(note.text);
+          const expired = noteIsExpired(facts, new Date().toISOString().slice(0, 10));
+          const source = facts.sourceKind === "chat" ? t("botPanel.memory.source.chat")
+            : facts.sourceKind === "room" ? t("botPanel.memory.source.room")
+            : facts.sourceKind === "thread" ? t("botPanel.memory.source.thread")
+            : facts.sourceKind === "dream" ? t("botPanel.memory.source.dream")
+            : facts.sourceKind === "noticed" ? t("botPanel.memory.source.noticed")
+            : facts.sourceKind === "other" ? t("botPanel.memory.source.other", { source: facts.source ?? "" })
+            : t("botPanel.memory.source.none");
+          return (
           <div key={`${note.path}:${note.line}:${note.text}`} data-memory-note={note.line ?? note.path} className={rowCls}>
-            <div className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink">{note.text}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] leading-[1.45] text-ink">{note.text}</div>
+              <div data-memory-note-facts className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-ink-tertiary">
+                {facts.date && <span dir="ltr">{t("botPanel.memory.facts.added", { date: facts.date })}</span>}
+                <span>{source}</span>
+                {facts.until && <span dir="ltr">{t("botPanel.memory.facts.until", { date: facts.until })}</span>}
+                {expired && <span data-memory-note-expired className="text-amber-700 dark:text-amber-300">{t("botPanel.memory.facts.expired")}</span>}
+                {(facts.struck || facts.supersededOn) && <span className="line-through">{t("botPanel.memory.facts.superseded")}{facts.supersededOn ? ` · ${facts.supersededOn}` : ""}</span>}
+              </div>
+            </div>
             <TrashButton label={t("botPanel.memory.forget")} disabled={saving} onClick={() => forget(note)} />
           </div>
-        ))}
+          );
+        })}
         {error && <NoteRow tone="warn">{error}</NoteRow>}
       </Card>
       {memoryOn && (

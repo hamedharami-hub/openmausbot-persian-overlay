@@ -896,5 +896,19 @@
   "settings.companyBoard.open": "باز کردن برد شرکت",
   "remote.serverPairing.androidQr": "اپ اندروید",
   "remote.serverPairing.webQr": "آی‌فون یا مرورگر",
-  "remote.serverPairing.copyInvite": "رونوشت لینک اندروید"
+  "remote.serverPairing.copyInvite": "رونوشت لینک اندروید",
+  "memory.source.settings": "در پنل حافظه",
+  "memory.source.dream": "ساختهٔ خود بات از چند گفتگو",
+  "memory.source.move": "منتقل‌شده همراه انتقال Cloud",
+  "botPanel.memory.facts.added": "افزوده‌شده {date}",
+  "botPanel.memory.facts.until": "معتبر تا {date}",
+  "botPanel.memory.facts.expired": "منقضی شده",
+  "botPanel.memory.facts.superseded": "دیگر درست نیست",
+  "botPanel.memory.source.chat": "از یک گفتگو",
+  "botPanel.memory.source.room": "از یک گفتگوی گروهی",
+  "botPanel.memory.source.thread": "از گفتگویی دیگر",
+  "botPanel.memory.source.dream": "ساختهٔ خود بات از چند گفتگو",
+  "botPanel.memory.source.noticed": "در جریان یک کار متوجه شد",
+  "botPanel.memory.source.other": "منبع ثبت‌شده: {source}",
+  "botPanel.memory.source.none": "منبعی ثبت نشده"
 }
