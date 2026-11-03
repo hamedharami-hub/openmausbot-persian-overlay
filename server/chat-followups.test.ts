@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { promptWithResearchRequest } from "../shared/research-request.ts";
 import * as journal from "./message-db.ts";
 import { cancelChannelMessage, drainChannelMessages, queuedChannelMessage, queueChannelMessage, restoreChannelMessages } from "./channel-queue.ts";
-import { cancelSteeredMessage, drainSteeredMessages, queuedSteerSnapshot, queueSteeredMessage, restoreSteeredMessages, type SteerStore } from "./steer-queue.ts";
+import { cancelSteeredMessage, drainSteeredMessages, queuedSteerSnapshot, queuedSteeredMessage, queueSteeredMessage, restoreSteeredMessages, type SteerStore } from "./steer-queue.ts";
 import type { BotRecord, Message } from "./store.ts";
 
 afterEach(() => {
@@ -32,10 +32,11 @@ describe("durable accepted follow-ups", () => {
     const research = { mode: "research", depth: "deep", length: "short" } as const;
     const text = "Current evidence please";
     const prompt = promptWithResearchRequest(text, research);
-    queueSteeredMessage("bot", "thread", text, { research, prompt });
+    queueSteeredMessage("bot", "thread", text, { research, prompt, sendId: "research-queued" });
     journal.closeMessageDb();
     restoreSteeredMessages();
     expect(queuedSteerSnapshot(() => true).thread?.[0]).toMatchObject({ text, research });
+    expect(queuedSteeredMessage("bot", "thread", "research-queued")).toMatchObject({ text, research });
     const store = storeFor("bot", "thread");
     const run = vi.fn();
     drainSteeredMessages(store, run);

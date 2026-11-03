@@ -253,11 +253,11 @@ export function queuedSteeredMessage(
   botId: string,
   threadId: string,
   sendId: string,
-): { id: string; text: string; replyToId?: string; reason?: SteerQueueReason } | null {
+): { id: string; text: string; replyToId?: string; reason?: SteerQueueReason; research?: Message["research"] } | null {
   const entry = queues.get(threadId);
   if (!entry || entry.botId !== botId) return null;
   const item = entry.items.find((candidate) => candidate.sendId === sendId);
-  return item ? { id: item.messageId, text: item.text, replyToId: item.replyToId, ...(item.reason ? { reason: item.reason } : {}) } : null;
+  return item ? { id: item.messageId, text: item.text, replyToId: item.replyToId, ...(item.reason ? { reason: item.reason } : {}), ...(item.research ? { research: item.research } : {}) } : null;
 }
 
 export function cancelSteeredMessage(botId: string, messageId: string, expectedThreadId?: string): boolean {
