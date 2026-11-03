@@ -22,6 +22,17 @@ const PATH = /^\/api\/gemini-live\/conversation$/;
 const SETUP_TIMEOUT_MS = 20_000;
 const IDLE_TIMEOUT_MS = 10 * 60_000;
 
+/** A WebSocket frame arrives as text, a Buffer, an ArrayBuffer or a Blob, depending on the client. */
+async function frameText(data: unknown): Promise<string | null> {
+  if (typeof data === "string") return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString();
+  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString();
+  if (data && typeof (data as { arrayBuffer?: unknown }).arrayBuffer === "function") {
+    return Buffer.from(await (data as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer()).toString();
+  }
+  return null;
+}
+
 export interface GeminiLiveRouteDeps {
   config(): AppConfig;
   upgrades: Upgrades;
@@ -81,12 +92,15 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
         catch { send({ kind: "error", message: "Could not start the Gemini Live session." }); finish("setup failed"); }
       };
       upstream.onmessage = (event) => {
-        const raw = typeof event.data === "string" ? event.data : Buffer.from(event.data as ArrayBuffer).toString();
-        for (const live of decodeGeminiLiveFrame(raw)) {
-          if (live.kind === "ready") { conversation.setupDone = true; clearTimeout(setupTimer); }
-          conversation.lastActivity = Date.now();
-          send(live);
-        }
+        void (async () => {
+          const raw = await frameText(event.data);
+          if (raw === null) return;
+          for (const live of decodeGeminiLiveFrame(raw)) {
+            if (live.kind === "ready") { conversation.setupDone = true; clearTimeout(setupTimer); }
+            conversation.lastActivity = Date.now();
+            send(live);
+          }
+        })().catch(() => send({ kind: "error", message: "Could not read the Gemini Live frame." }));
       };
       upstream.onerror = () => {
         send({ kind: "error", message: "The Gemini Live connection failed." });

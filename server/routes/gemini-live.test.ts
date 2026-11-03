@@ -16,6 +16,7 @@ class FakeUpstream {
   close() { this.closed = true; }
   open() { this.onopen?.({}); }
   emit(payload: unknown) { this.onmessage?.({ data: JSON.stringify(payload) }); }
+  emitBinary(data: unknown) { this.onmessage?.({ data }); }
 }
 
 async function fixture(configured = true) {
@@ -83,6 +84,10 @@ describe("Gemini Live conversation route", () => {
     expect(forwarded.realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
 
     upstream.emit({ outputTranscription: { text: "سلام" } });
+    // A binary frame arrives as a Blob from some WebSocket clients; it must not crash the server.
+    upstream.emitBinary(new Blob([JSON.stringify({ outputTranscription: { text: "دوم" } })]));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(events).toEqual(expect.arrayContaining([{ kind: "caption", text: "دوم", role: "assistant" }]));
     upstream.emit({ serverContent: { modelTurn: { parts: [{ inlineData: { data: "AAAA", mimeType: "audio/pcm;rate=24000" } }] } } });
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(events).toEqual(expect.arrayContaining([{ kind: "ready" }, { kind: "caption", text: "سلام", role: "assistant" }, { kind: "audio", data: "AAAA", mimeType: "audio/pcm;rate=24000" }]));
