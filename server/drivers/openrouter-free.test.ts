@@ -83,12 +83,18 @@ afterEach(() => {
 
 describe("free OpenRouter models", () => {
   it("finds the free models that take tools in OpenRouter's order", () => {
-    expect(freeToolModels(CATALOG)).toEqual(FREE_TOOL_IDS);
-    expect(FREE_TOOL_IDS).toHaveLength(15);
-    // Free but without tools, zero-priced but not ":free", and the router are never a bot's default.
-    expect(FREE_TOOL_IDS).not.toContain("nvidia/nemotron-3.5-content-safety:free");
-    expect(FREE_TOOL_IDS).not.toContain("google/lyria-3-pro-preview");
-    expect(FREE_TOOL_IDS).not.toContain("openrouter/free");
+    expect(freeToolModels(CATALOG)).toEqual([...FREE_TOOL_IDS, "openrouter/free"]);
+    expect(freeToolModels(CATALOG)).not.toContain("nvidia/nemotron-3.5-content-safety:free");
+    expect(freeToolModels(CATALOG)).not.toContain("google/lyria-3-pro-preview");
+  });
+
+  it("recognizes zero-priced tool models without relying on an id suffix", () => {
+    expect(freeToolModels([
+      { id: "provider/free-tools", pricing: { prompt: "0.000", completion: 0 }, supported_parameters: ["tools"] },
+      { id: "provider/paid", pricing: { prompt: "0", completion: "0.01" }, supported_parameters: ["tools"] },
+      { id: "provider/unknown", pricing: { prompt: "", completion: null }, supported_parameters: ["tools"] },
+      { id: "provider/no-tools", pricing: { prompt: "0", completion: "0" } },
+    ])).toEqual(["provider/free-tools"]);
   });
 
   it("prefers the listed models, then the first free tool-capable model", () => {

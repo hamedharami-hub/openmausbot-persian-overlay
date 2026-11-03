@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { recordEvents, type EventRecorder } from "../../testing/events.ts";
@@ -547,6 +547,29 @@ describe("OpenCode catalog discovery from the ACP session", () => {
       }, FAKE_CLI);
       expect(found.options.map((option) => option.id)).toEqual(["opencode/big-pickle", "opencode-go/minimax-m3"]);
       expect(found.options[0]).toMatchObject({ contextWindow: 200_000 });
+    } finally {
+      await removeTempDir(scratch);
+    }
+  });
+
+  it("refreshes OpenCode's catalog before opening the ACP catalog session", async () => {
+    const scratch = mkdtempSync(join(tmpdir(), "omb-opencode-refresh-"));
+    const marker = join(scratch, "refreshed");
+    const cli = join(scratch, "opencode-refresh.ts");
+    writeFileSync(cli, `#!/usr/bin/env node
+      import { existsSync, writeFileSync } from "node:fs";
+      if (process.argv.includes("models")) {
+        if (!process.argv.includes("--refresh")) process.exit(1);
+        writeFileSync(${JSON.stringify(marker)}, "refreshed");
+      } else if (!existsSync(${JSON.stringify(marker)})) process.exit(1);
+      await import(${JSON.stringify(pathToFileURL(FAKE_CLI).href)});
+    `, { mode: 0o755 });
+    try {
+      const found = await discoverOpenCodeModels({
+        ...process.env, HOME: scratch, FAKE_ACP_MODELS: "opencode-go/catalog-model,opencode/preview-free",
+      }, cli);
+      expect(existsSync(marker)).toBe(true);
+      expect(found.options.map((option) => option.id)).toEqual(["opencode-go/catalog-model", "opencode/preview-free"]);
     } finally {
       await removeTempDir(scratch);
     }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InstanceInfo, ModelSelection } from "@/state/store";
 import { modelName, simpleModelMenu, SIMPLE_SEARCH_AFTER } from "./simple-model-menu";
+import { modelStarKey } from "./model-stars";
 
 vi.hoisted(() => {
   vi.stubGlobal("window", {});
@@ -52,6 +53,16 @@ const rows = (built: Menu, index = 0) => {
 const body = (built: Menu, index = 0) => built.groups[index]!.body;
 
 describe("the Simple model menu", () => {
+  it("keeps starred models first and visible when collapsed, expanded, or searching", () => {
+    const stars = new Set([modelStarKey("claude", "sonnet-4-5")]);
+    for (const expanded of [new Set<string>(), new Set(["claude"])]) {
+      expect(rows(menu([claude()], { stars, expanded }))[0]).toBe("Sonnet 4.5");
+    }
+    const searched = menu([claude(), codex, cursor, openaiKey], { stars, query: "sonnet" });
+    expect(rows(searched)[0]).toBe("Sonnet 4.5");
+    expect(rows(menu([claude()]))[0]).toBe("Fable 5.1");
+  });
+
   it("puts the current model on top, then the rest of its provider under a heading, in short names", () => {
     const built = menu([claude()]);
     expect(built.current).toMatchObject({ label: "Claude Sonnet 5", title: "Claude · Claude Sonnet 5", warning: false, pending: false });

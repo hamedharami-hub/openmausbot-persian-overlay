@@ -58,7 +58,8 @@ const freeId = (id: unknown): id is string => typeof id === "string" && id.endsW
 
 export function isFreeModel(row: OpenRouterModelRow): boolean {
   const pricing = row.pricing && typeof row.pricing === "object" ? (row.pricing as { prompt?: unknown; completion?: unknown }) : null;
-  return freeId(row.id) || (pricing?.prompt === "0" && pricing.completion === "0");
+  const zero = (value: unknown) => (typeof value === "string" && value.trim() !== "" || typeof value === "number") && Number(value) === 0;
+  return freeId(row.id) || (zero(pricing?.prompt) && zero(pricing?.completion));
 }
 
 export function freeLabel(label: string, row: OpenRouterModelRow): string {
@@ -68,7 +69,7 @@ export function freeLabel(label: string, row: OpenRouterModelRow): string {
 /** Free models that take tools, in OpenRouter's order. */
 export function freeToolModels(rows: readonly OpenRouterModelRow[]): string[] {
   return rows.flatMap((row) =>
-    freeId(row.id) && Array.isArray(row.supported_parameters) && row.supported_parameters.includes("tools") ? [row.id] : []);
+    typeof row.id === "string" && isFreeModel(row) && Array.isArray(row.supported_parameters) && row.supported_parameters.includes("tools") ? [row.id] : []);
 }
 
 export function freeDefault(freeTools: readonly string[]): string | undefined {

@@ -212,7 +212,7 @@ function runOpenCodeModelsVerbose(
   return new Promise((resolve, reject) => {
     execCli(
       cli,
-      ["models", "--verbose"],
+      ["models", "--refresh", "--verbose"],
       { timeout: 20_000, maxBuffer: 8 * 1024 * 1024, env: environment },
       (error, stdout, stderr) => {
         if (error) {
@@ -422,13 +422,12 @@ export async function discoverOpenCodeModels(
 ): Promise<ModelCatalog> {
   const probeSession = () => probeOpenCodeSession(cli, environment);
   const readMetadata = () => runOpenCodeModelsVerbose(cli, environment).then(parseOpenCodeModels);
-  let [session, verbose] = await Promise.allSettled([probeSession(), readMetadata()]);
-  // Two OpenCode processes starting together in a fresh home race to create its database and one fails
-  // (1 in 8 fresh homes). A timed-out half is not retried.
   const retry = (result: PromiseSettledResult<unknown>) =>
     result.status === "rejected" && (result.reason as { timedOut?: boolean } | null)?.timedOut !== true;
-  if (retry(session)) [session] = await Promise.allSettled([probeSession()]);
+  let [verbose] = await Promise.allSettled([readMetadata()]);
   if (retry(verbose)) [verbose] = await Promise.allSettled([readMetadata()]);
+  let [session] = await Promise.allSettled([probeSession()]);
+  if (retry(session)) [session] = await Promise.allSettled([probeSession()]);
   const metadata = verbose.status === "fulfilled" ? verbose.value : null;
   if (metadata) rememberPrices(metadata);
   const probe = session.status === "fulfilled" ? session.value : null;

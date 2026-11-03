@@ -70,6 +70,36 @@ describe("OpenAICompatDriver", () => {
     }
   });
 
+  it("refreshes the full advertised OpenRouter catalog, including older versions and free tool models", async () => {
+    let rows = [
+      { id: "vendor/model-1", created: 1 },
+      { id: "vendor/model-2", created: 2 },
+      { id: "vendor/tool-free", pricing: { prompt: "0.000", completion: "0" }, supported_parameters: ["tools"] },
+    ];
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/models")) return Response.json({ data: rows });
+      if (String(url).endsWith("/key")) return Response.json({ data: { is_free_tier: true } });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const instance = await OpenAICompatDriver.create({
+      instanceId: "openrouter-catalog-refresh", displayName: "OpenRouter", enabled: true,
+      config: OpenAICompatDriver.decodeConfig({ url: "https://openrouter.ai/api/v1" }),
+      environment: { OPENAI_COMPAT_API_KEY: "synthetic-catalog-key" },
+    });
+    try {
+      await instance.refreshModels?.();
+      expect(instance.models.options.map((option) => option.id)).toEqual(["vendor/tool-free", "vendor/model-1", "vendor/model-2"]);
+      expect(instance.models.default).toBe("vendor/tool-free");
+      expect(instance.models.options[0].label).toContain("(free)");
+      rows = [{ id: "vendor/new-model", created: 3 }];
+      await instance.refreshModels?.();
+      expect(instance.models.options.map((option) => option.id)).toEqual(["vendor/new-model"]);
+    } finally {
+      await instance.dispose();
+    }
+  });
+
   it("honours an explicit url and apiKeyEnv override", () => {
     const cfg = OpenAICompatDriver.decodeConfig({
       url: "https://api.groq.com/openai/v1/",
