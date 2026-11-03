@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 
-import { useStore, type Bot } from "@/state/store";
+import { useStore, currentTaskBot, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useCaptionChrome } from "./DesktopCapabilities";
 import { BOT_SECTIONS } from "./bot-settings/sections";
 import { useBotSettingsDerived } from "./bot-settings/useBotSettingsDerived";
 import { OverviewSection } from "./bot-settings/OverviewSection";
+import { BotNowCard } from "./bot-settings/BotNowCard";
 import { IdentitySection } from "./bot-settings/IdentitySection";
 import { SlackSection } from "./bot-settings/SlackSection";
 import { useSlackManagementUrl } from "./bot-settings/useSlackManagement";
@@ -102,17 +103,20 @@ export function BotSettingsDialog({ bot, overlay = false }: {
         return overview === null && overviewError ? (
           <div className="rounded-xl bg-card p-4 text-[13px] text-ink-secondary">Couldn’t load the overview.</div>
         ) : (
-          <OverviewSection
-            overview={overview}
-            refreshError={overview !== null && overviewError}
-            prompt={prompt}
-            promptError={promptError}
-            onOpen={(target) => dispatch({ type: "toggleSettings", open: true, section: target })}
-            onSetup={derived.canCoordinate && !bot.busy ? () => {
-              dispatch({ type: "toggleSettings", open: false });
-              dispatch({ type: "send", botId: bot.id, text: "/setup", threadId: bot.threadId });
-            } : undefined}
-          />
+          <div className="flex flex-col gap-3">
+            <BotNowCard bot={currentTaskBot(bot)} queued={state.pendingQueued[bot.threadId]?.length ?? 0} />
+            <OverviewSection
+              overview={overview}
+              refreshError={overview !== null && overviewError}
+              prompt={prompt}
+              promptError={promptError}
+              onOpen={(target) => dispatch({ type: "toggleSettings", open: true, section: target })}
+              onSetup={derived.canCoordinate && !bot.busy ? () => {
+                dispatch({ type: "toggleSettings", open: false });
+                dispatch({ type: "send", botId: bot.id, text: "/setup", threadId: bot.threadId });
+              } : undefined}
+            />
+          </div>
         );
       case "identity":
         return (
