@@ -150,6 +150,24 @@ export function createBotMemoryRoutes(deps: BotMemoryRouteDeps): RouteHandler {
       if (!["GET", "PUT", "DELETE"].includes(method)) return PASS;
       return serveFile(layer, (change) => change());
     }
+    // A member's own layer is journaled like any other, so its rows can be read and undone here too.
+    m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/mine\/journal$/);
+    if (m && method === "GET") {
+      const layer = deps.bot(m[1]) ? deps.ownLayer?.(auth, m[1]) ?? null : null;
+      if (!layer) return json(res, 404, { error: "no such bot" });
+      await flushMemoryJournal(layer);
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50));
+      return json(res, 200, { entries: readMemoryJournal(layer, limit).map((entry) => journalEntryForClient(m![1], entry)) });
+    }
+    m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/mine\/journal\/([\w-]+)\/revert$/);
+    if (m && method === "POST") {
+      const layer = deps.bot(m[1]) ? deps.ownLayer?.(auth, m[1]) ?? null : null;
+      if (!layer) return json(res, 404, { error: "no such bot" });
+      await flushMemoryJournal(layer);
+      const result = revertMemoryChange(layer, m[2]);
+      if (!result.ok) return json(res, result.status, { error: result.error });
+      return json(res, 200, { ok: true, ...result.doc, entry: result.entry ? journalEntryForClient(m[1], result.entry) : null, overview: memoryOverview(layer) });
+    }
     m = path.match(/^\/api\/bots\/([\w-]+)\/memory\/journal$/);
     if (m && method === "GET") {
       if (!deps.bot(m[1])) return json(res, 404, { error: "no such bot" });

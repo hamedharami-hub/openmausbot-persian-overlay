@@ -70,9 +70,12 @@ it("on a Team Cloud shows what the bot remembers about the person, from their ow
   await settle();
   expect(files["memory/food.md"]).toBe("");
   expect(host.textContent).not.toContain("durian");
-  // A Team Cloud member's own layer has no journal read route, so no undo is offered rather than a broken button.
-  expect(host.querySelector("[data-memory-undo] button")).toBeNull();
-  expect(host.querySelector("[data-memory-undo-unavailable]")?.textContent).toContain("no undo yet");
+  // A Team Cloud member's own layer keeps its journal, so the same undo is offered there.
+  const undo = host.querySelector("[data-memory-undo] button");
+  expect(undo).not.toBeNull();
+  await act(async () => (undo as HTMLButtonElement).click());
+  await settle();
+  expect(calls.some(([method, path]) => method === "POST" && path === "/api/bots/scout/memory/mine/journal/put-1/revert")).toBe(true);
 });
 
 it("shows what each note records, and invents no source for a hand-typed one", async () => {

@@ -90,6 +90,27 @@ describe("the bot-memory module through the route table", () => {
     }
   });
 
+  it("journals a member's own layer and undoes its changes there", async () => {
+    const layer = "bot-123--member-alice";
+    const base = await serve({ ownLayer: (_auth, botId) => (botId === "bot-123" ? layer : null) });
+    const put = await fetch(`${base}/api/bots/bot-123/memory/mine/file`, { method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: "MEMORY.md", text: "- A fact the bot noticed\n" }) });
+    expect(put.status).toBe(200);
+    const saved = (await put.json()) as { entry: { id: string; canRevert: boolean } };
+    expect(saved.entry.canRevert).toBe(true);
+    const journal = await fetch(`${base}/api/bots/bot-123/memory/mine/journal`);
+    expect(journal.status).toBe(200);
+    expect(((await journal.json()) as { entries: unknown[] }).entries).toHaveLength(1);
+    const revert = await fetch(`${base}/api/bots/bot-123/memory/mine/journal/${saved.entry.id}/revert`, { method: "POST" });
+    expect(revert.status).toBe(200);
+    expect((await revert.json()) as unknown).toMatchObject({ path: "MEMORY.md", exists: false, text: "" });
+    const mine = await (await fetch(`${base}/api/bots/bot-123/memory/mine/file`)).json() as { text: string };
+    expect(mine.text).toBe("");
+    const plain = await (await fetch(`${base}/api/bots/bot-123/memory/file`)).json() as { text: string };
+    expect(plain.text).toBe("", "the team layer is untouched");
+    expect((await fetch(`${base}/api/bots/bot-123/memory/mine/journal`)).status).toBe(404, "a refused member gets no journal");
+  });
+
   it("uses the upkeep service and refuses tidying when the bot has switched it off", async () => {
     let enabled = true;
     const tidied: string[] = [];
@@ -191,6 +212,8 @@ describe("the bot-memory module through the route table", () => {
       ["PUT", "/api/bots/b1/memory/file"],
       ["DELETE", "/api/bots/b1/memory/file"],
       ["GET", "/api/bots/b1/memory/journal"],
+    ["GET", "/api/bots/b1/memory/mine/journal"],
+    ["POST", "/api/bots/b1/memory/mine/journal/e1/revert"],
       ["POST", "/api/bots/b1/memory/journal/e1/revert"],
       ["GET", "/api/bots/b1/memory/upkeep"],
       ["POST", "/api/bots/b1/memory/tidy"],

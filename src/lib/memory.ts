@@ -92,13 +92,15 @@ export function deleteMemoryDoc(botId: string, path: string, mine = false): Prom
   return api(`${memoryRoute(botId, mine)}/file?path=${encodeURIComponent(path)}`, { method: "DELETE" });
 }
 
-export async function fetchMemoryJournal(botId: string, limit = 50): Promise<MemoryJournalRow[]> {
-  const result: { entries: MemoryJournalRow[] } = await api(`/api/bots/${botId}/memory/journal?limit=${limit}`);
+export async function fetchMemoryJournal(botId: string, limit = 50, mine = false): Promise<MemoryJournalRow[]> {
+  const route = mine ? `/api/bots/${botId}/memory/mine/journal` : `/api/bots/${botId}/memory/journal`;
+  const result: { entries: MemoryJournalRow[] } = await api(`${route}?limit=${limit}`);
   return result.entries;
 }
 
-export function revertMemoryChange(botId: string, entryId: string): Promise<MemoryDoc & { overview: MemoryOverview }> {
-  return api(`/api/bots/${botId}/memory/journal/${encodeURIComponent(entryId)}/revert`, { method: "POST" });
+export function revertMemoryChange(botId: string, entryId: string, mine = false): Promise<MemoryDoc & { overview: MemoryOverview }> {
+  const route = mine ? `/api/bots/${botId}/memory/mine/journal` : `/api/bots/${botId}/memory/journal`;
+  return api(`${route}/${encodeURIComponent(entryId)}/revert`, { method: "POST" });
 }
 
 export interface TidyReport {

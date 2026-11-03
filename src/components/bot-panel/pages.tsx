@@ -177,7 +177,7 @@ export function MemoryPage({ bot }: PageContext) {
   const undoForget = () => {
     if (!forgotten) return;
     void change(async () => {
-      await revertMemoryChange(bot.id, forgotten.id);
+      await revertMemoryChange(bot.id, forgotten.id, memory.mine);
       await memory.reload();
       return true;
     });
@@ -224,18 +224,13 @@ export function MemoryPage({ bot }: PageContext) {
           </div>
           );
         })}
-        {forgotten && !memory.mine && forgotten.canRevert && (
+        {forgotten && forgotten.canRevert && (
           <div data-memory-undo className={rowCls}>
             <div className="min-w-0 flex-1 text-[13px] text-ink-secondary">{t("botPanel.memory.forgotten")}</div>
             <button type="button" disabled={saving} onClick={undoForget} className="shrink-0 rounded-lg px-2 py-1 text-[13px] font-medium text-accent hover:bg-accent/10 disabled:opacity-50">{t("botPanel.memory.undo")}</button>
           </div>
         )}
-        {forgotten && memory.mine && (
-          <div data-memory-undo-unavailable className={rowCls}>
-            <div className="min-w-0 flex-1 text-[12px] text-ink-secondary">{t("botPanel.memory.undoUnavailable", { reason: t("botPanel.memory.undoNoRoute") })}</div>
-          </div>
-        )}
-        {forgotten && !memory.mine && !forgotten.canRevert && (
+        {forgotten && !forgotten.canRevert && (
           <div data-memory-undo-unavailable className={rowCls}>
             <div className="min-w-0 flex-1 text-[12px] text-ink-secondary">{t("botPanel.memory.undoUnavailable", { reason: forgotten.revertUnavailableReason ?? t("botPanel.memory.undoNoRoute") })}</div>
           </div>
