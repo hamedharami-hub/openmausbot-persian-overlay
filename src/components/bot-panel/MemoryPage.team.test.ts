@@ -34,8 +34,16 @@ beforeEach(() => {
     if (!url.pathname.includes("/memory/mine")) return reply(403, { error: "forbidden: this session lacks the admin scope" });
     const path = url.searchParams.get("path") ?? (init?.body ? JSON.parse(String(init.body)).path : "MEMORY.md");
     if (url.pathname.endsWith("/mine")) return reply(200, { topics: Object.keys(files).filter((file) => file.startsWith("memory/")).map((file) => ({ path: file })) });
-    if (method === "PUT") files[path] = JSON.parse(String(init!.body)).text;
-    if (method === "DELETE") delete files[path];
+    if (method === "PUT") {
+      files[path] = JSON.parse(String(init!.body)).text;
+      return reply(200, { ok: true, path, text: files[path], hash: `h${files[path]!.length}`, exists: true, overview: {}, entry: { id: "put-1", at: Date.now(), botId: bot.id, path,
+        actor: "person", via: "ui", kind: "edited", beforeHash: "a", afterHash: `h${files[path]!.length}`, diff: "", added: 0, removed: 1, canRevert: true } });
+    }
+    if (method === "DELETE") {
+      delete files[path];
+      return reply(200, { ok: true, path, overview: {}, entry: { id: "del-1", at: Date.now(), botId: bot.id, path, actor: "person", via: "ui", kind: "deleted",
+        beforeHash: "a", afterHash: null, diff: "", added: 0, removed: 1, canRevert: true } });
+    }
     const text = files[path] ?? "";
     return reply(200, { path, text, hash: `h${text.length}`, exists: path in files, overview: {} });
   }));
@@ -62,6 +70,9 @@ it("on a Team Cloud shows what the bot remembers about the person, from their ow
   await settle();
   expect(files["memory/food.md"]).toBe("");
   expect(host.textContent).not.toContain("durian");
+  // A Team Cloud member's own layer has no journal read route, so no undo is offered rather than a broken button.
+  expect(host.querySelector("[data-memory-undo] button")).toBeNull();
+  expect(host.querySelector("[data-memory-undo-unavailable]")?.textContent).toContain("no undo yet");
 });
 
 it("shows what each note records, and invents no source for a hand-typed one", async () => {
@@ -77,6 +88,7 @@ it("shows what each note records, and invents no source for a hand-typed one", a
   expect(facts[1]).not.toContain("added");
   expect(facts[2]).toContain("no source recorded");
   expect(host.querySelector("[data-memory-note-expired]")).toBeNull();
+  expect(host.querySelector("[data-memory-undo-unavailable]")).toBeNull();
   for (const row of host.querySelectorAll("[data-memory-note-facts]")) expect(row.textContent).not.toMatch(/verified|confirms|ستاره/iu);
 });
 

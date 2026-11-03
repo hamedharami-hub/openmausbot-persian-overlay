@@ -910,5 +910,9 @@
   "botPanel.memory.source.dream": "ساختهٔ خود بات از چند گفتگو",
   "botPanel.memory.source.noticed": "در جریان یک کار متوجه شد",
   "botPanel.memory.source.other": "منبع ثبت‌شده: {source}",
-  "botPanel.memory.source.none": "منبعی ثبت نشده"
+  "botPanel.memory.source.none": "منبعی ثبت نشده",
+  "botPanel.memory.forgotten": "از حافظه حذف شد.",
+  "botPanel.memory.undo": "واگرد",
+  "botPanel.memory.undoUnavailable": "این تغییر از اینجا قابل واگرد نیست: {reason}",
+  "botPanel.memory.undoNoRoute": "یادداشت‌های خودت در Team Cloud هنوز واگرد ندارند"
 }

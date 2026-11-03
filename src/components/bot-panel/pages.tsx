@@ -4,7 +4,7 @@ import { FolderOpen, Plus } from "lucide-react";
 import { appSwitchPatch } from "@/lib/bot-app-access";
 import { skillsLibraryEnabled } from "@/lib/feature-flags";
 import { t } from "@/lib/i18n";
-import { deleteMemoryDoc, MEMORY_INDEX, saveMemoryDoc, type MemoryDoc } from "@/lib/memory";
+import { deleteMemoryDoc, MEMORY_INDEX, revertMemoryChange, saveMemoryDoc, type MemoryDoc, type MemoryJournalRow } from "@/lib/memory";
 import { openExternalLink } from "@/lib/app-links";
 import type { Routine } from "@/lib/routines";
 import { shortPath } from "@/lib/short-path";
@@ -133,6 +133,7 @@ export function MemoryPage({ bot }: PageContext) {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgotten, setForgotten] = useState<MemoryJournalRow | null>(null);
   const memoryOn = bot.memoryEnabled !== false;
   const notes = memory.docs ? panelMemoryNotes(memory.docs) : null;
   const index = memory.docs?.find((doc) => doc.path === MEMORY_INDEX) ?? null;
@@ -141,6 +142,7 @@ export function MemoryPage({ bot }: PageContext) {
     if (saving) return false;
     setSaving(true);
     setError(null);
+    setForgotten(null);
     try {
       return await save();
     } catch (cause) {
@@ -154,6 +156,7 @@ export function MemoryPage({ bot }: PageContext) {
     const result = await saveMemoryDoc(bot.id, doc.path, text, doc.exists ? doc.hash : undefined, memory.mine);
     if (result.ok) {
       memory.setDoc(result.doc);
+      setForgotten(result.entry ?? null);
       return true;
     }
     await memory.reload();
@@ -165,7 +168,16 @@ export function MemoryPage({ bot }: PageContext) {
     if (!doc) return;
     if (note.line !== null) void write(doc, withoutMemoryNote(doc.text, note.line));
     else void change(async () => {
-      await deleteMemoryDoc(bot.id, doc.path, memory.mine);
+      const removed = await deleteMemoryDoc(bot.id, doc.path, memory.mine);
+      setForgotten(removed.entry ?? null);
+      await memory.reload();
+      return true;
+    });
+  };
+  const undoForget = () => {
+    if (!forgotten) return;
+    void change(async () => {
+      await revertMemoryChange(bot.id, forgotten.id);
       await memory.reload();
       return true;
     });
@@ -212,6 +224,22 @@ export function MemoryPage({ bot }: PageContext) {
           </div>
           );
         })}
+        {forgotten && !memory.mine && forgotten.canRevert && (
+          <div data-memory-undo className={rowCls}>
+            <div className="min-w-0 flex-1 text-[13px] text-ink-secondary">{t("botPanel.memory.forgotten")}</div>
+            <button type="button" disabled={saving} onClick={undoForget} className="shrink-0 rounded-lg px-2 py-1 text-[13px] font-medium text-accent hover:bg-accent/10 disabled:opacity-50">{t("botPanel.memory.undo")}</button>
+          </div>
+        )}
+        {forgotten && memory.mine && (
+          <div data-memory-undo-unavailable className={rowCls}>
+            <div className="min-w-0 flex-1 text-[12px] text-ink-secondary">{t("botPanel.memory.undoUnavailable", { reason: t("botPanel.memory.undoNoRoute") })}</div>
+          </div>
+        )}
+        {forgotten && !memory.mine && !forgotten.canRevert && (
+          <div data-memory-undo-unavailable className={rowCls}>
+            <div className="min-w-0 flex-1 text-[12px] text-ink-secondary">{t("botPanel.memory.undoUnavailable", { reason: forgotten.revertUnavailableReason ?? t("botPanel.memory.undoNoRoute") })}</div>
+          </div>
+        )}
         {error && <NoteRow tone="warn">{error}</NoteRow>}
       </Card>
       {memoryOn && (

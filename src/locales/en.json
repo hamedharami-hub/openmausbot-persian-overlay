@@ -7357,5 +7357,9 @@
   "settings.companyBoard.open": "Open company board",
   "remote.serverPairing.androidQr": "Android app",
   "remote.serverPairing.webQr": "iPhone or browser",
-  "remote.serverPairing.copyInvite": "Copy Android link"
+  "remote.serverPairing.copyInvite": "Copy Android link",
+  "botPanel.memory.forgotten": "Removed from its memory.",
+  "botPanel.memory.undo": "Undo",
+  "botPanel.memory.undoUnavailable": "This change cannot be undone here: {reason}",
+  "botPanel.memory.undoNoRoute": "your own notes on a Team Cloud have no undo yet"
 }

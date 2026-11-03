@@ -58,7 +58,7 @@ export interface MemoryJournalRow {
 }
 
 export type SaveResult =
-  | { ok: true; doc: MemoryDoc; overview: MemoryOverview }
+  | { ok: true; doc: MemoryDoc; overview: MemoryOverview; entry?: MemoryJournalRow | null }
   | { ok: false; conflict: true; current: string; currentHash: string };
 
 /** `mine`: on a Team Cloud, the signed-in person's own layer of the bot's memory rather than the team's. */
@@ -83,11 +83,12 @@ export async function saveMemoryDoc(botId: string, path: string, text: string, e
     return { ok: false, conflict: true, current: body.current, currentHash: body.currentHash };
   }
   if (!response.ok) throw new ApiError(typeof body.error === "string" ? body.error : `${response.status} ${response.statusText}`, response.status);
-  const saved = body as unknown as MemoryDoc & { overview: MemoryOverview };
-  return { ok: true, doc: { path: saved.path, text: saved.text, hash: saved.hash, exists: saved.exists }, overview: saved.overview };
+  const saved = body as unknown as MemoryDoc & { overview: MemoryOverview; entry?: MemoryJournalRow | null };
+  return { ok: true, doc: { path: saved.path, text: saved.text, hash: saved.hash, exists: saved.exists }, overview: saved.overview,
+    ...(saved.entry !== undefined ? { entry: saved.entry } : {}) };
 }
 
-export function deleteMemoryDoc(botId: string, path: string, mine = false): Promise<{ overview: MemoryOverview }> {
+export function deleteMemoryDoc(botId: string, path: string, mine = false): Promise<{ overview: MemoryOverview; entry?: MemoryJournalRow | null }> {
   return api(`${memoryRoute(botId, mine)}/file?path=${encodeURIComponent(path)}`, { method: "DELETE" });
 }
 
