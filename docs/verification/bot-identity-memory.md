@@ -46,15 +46,30 @@ than "in Settings", since both surfaces write through the same route.
 ## Checks
 
 ```sh
-pnpm exec vitest run src/lib/bot-now.test.ts src/components/bot-settings/BotNowCard.test.ts src/components/bot-panel/memory-notes.test.ts src/components/bot-panel/MemoryPage.team.test.ts src/lib/memory.test.ts src/components/bot-settings/MemorySection.test.ts src/components/BotSettingsDialog.simple.test.ts --maxWorkers=1
+pnpm exec vitest run src/lib/bot-now.test.ts src/components/bot-settings/BotNowCard.test.ts src/components/bot-panel/memory-notes.test.ts src/components/bot-panel/MemoryPage.team.test.ts src/lib/memory.test.ts src/components/bot-settings/MemorySection.test.ts src/components/BotSettingsDialog.simple.test.ts src/components/bot-panel/MemoryPage.undo.test.ts --maxWorkers=1
 ```
 
 Unit tests cover absent evidence, blockers, outcome labelling, stale and
 future-dated rows, live-only mission titles, the grammar parser, and that a
-hand-typed note gains no source. The MemoryPage DOM test drives the real panel
+hand-typed note gains no source. The undo DOM test drives the real panel on the desktop route: forget a note, see
+the Undo row, click it, and assert the revert request and the restored note. The
+Team Cloud test asserts no undo button is shown there and that the reason line
+appears instead. The MemoryPage DOM test drives the real panel
 with a stubbed memory route and asserts the badges rendered, the no-source case,
 and that no verified/completion wording appears. The dialog test keeps the
 Advanced memory panel and the overview behaviour intact.
+
+## Undo after removing a note
+
+Removing a note from the panel (Advanced settings or the bot panel) now offers a
+single **Undo** row that reverts that journaled change by id and reloads the
+file. It is offered only where the revert route can serve it: the desktop/base
+bot layer, when the journal entry says it can be reverted. On a Team Cloud
+member's own layer there is still no journal read route, so the panel says the
+change cannot be undone here rather than showing a button that would fail. When
+the journal says a change cannot be restored (too large, or text that had to be
+redacted), the recorded reason is shown instead. The offer is cleared by the
+next write, so a later edit cannot be silently overwritten by a stale undo.
 
 ## Not covered
 
