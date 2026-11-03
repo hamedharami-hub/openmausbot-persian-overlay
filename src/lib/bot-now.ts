@@ -6,6 +6,7 @@ export type BotNowState = "working" | "waiting-on-you" | "idle" | "no-signal" | 
 
 export interface BotNowBlocker { kind: "approval" | "question"; messageId: string; at: number; detail?: string }
 export interface BotNowLastResult { messageId: string; at: number; excerpt: string; succeeded: boolean | null }
+export interface BotNowCollaborator { botId: string; name: string; lastAt: number }
 export interface BotNow {
   state: BotNowState;
   startedAt: number | null;
@@ -13,6 +14,8 @@ export interface BotNow {
   lastResult: BotNowLastResult | null;
   queued: number;
   missionTitle: string | null;
+  waitingForTeammates: boolean;
+  collaborators: BotNowCollaborator[];
 }
 
 const MAX_AGE_MS = 24 * 60 * 60_000;
@@ -50,6 +53,13 @@ export function botNow(bot: Bot, messages: readonly Message[], queued = 0, now =
   const last = rows.filter((message) => message.role === "bot" && message.kind === "text" && !message.webhookPost
     && Boolean(message.text?.trim()) && timeOf(message.at, now) !== null && now - message.at <= MAX_AGE_MS).at(-1);
   const startedAt = state === "working" || state === "waiting-on-you" ? timeOf(bot.turnStartedAt, now) : null;
+  const collaborators = new Map<string, BotNowCollaborator>();
+  for (const message of rows) {
+    const comm = message.comm;
+    if (!comm || !timeOf(message.at, now)) continue;
+    const existing = collaborators.get(comm.withBotId);
+    if (!existing || message.at > existing.lastAt) collaborators.set(comm.withBotId, { botId: comm.withBotId, name: comm.withName, lastAt: message.at });
+  }
   return {
     state,
     startedAt,
@@ -60,5 +70,7 @@ export function botNow(bot: Bot, messages: readonly Message[], queued = 0, now =
     } : null,
     queued: Number.isInteger(queued) && queued > 0 ? queued : 0,
     missionTitle: bot.busy || state === "working" ? (bot.tasks?.find((task) => task.threadId === bot.threadId)?.title ?? null) : null,
+    waitingForTeammates: bot.waitingForTeammates === true,
+    collaborators: [...collaborators.values()].sort((a, b) => b.lastAt - a.lastAt).slice(0, 5),
   };
 }
