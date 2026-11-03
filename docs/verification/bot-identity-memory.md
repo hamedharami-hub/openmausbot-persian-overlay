@@ -53,8 +53,10 @@ Unit tests cover absent evidence, blockers, outcome labelling, stale and
 future-dated rows, live-only mission titles, the grammar parser, and that a
 hand-typed note gains no source. The undo DOM test drives the real panel on the desktop route: forget a note, see
 the Undo row, click it, and assert the revert request and the restored note. The
-Team Cloud test asserts no undo button is shown there and that the reason line
-appears instead. The MemoryPage DOM test drives the real panel
+Team Cloud test performs the same undo through the own-layer route and asserts
+the request path, plus that no layer means no journal route (404). The server
+route test writes and reverts on a member layer and checks the team layer is
+unchanged. The MemoryPage DOM test drives the real panel
 with a stubbed memory route and asserts the badges rendered, the no-source case,
 and that no verified/completion wording appears. The dialog test keeps the
 Advanced memory panel and the overview behaviour intact.
@@ -63,17 +65,17 @@ Advanced memory panel and the overview behaviour intact.
 
 Removing a note from the panel (Advanced settings or the bot panel) now offers a
 single **Undo** row that reverts that journaled change by id and reloads the
-file. It is offered only where the revert route can serve it: the desktop/base
-bot layer, when the journal entry says it can be reverted. On a Team Cloud
-member's own layer there is still no journal read route, so the panel says the
-change cannot be undone here rather than showing a button that would fail. When
+file. It works for the base bot layer and for a Team Cloud member's own layer: the
+own-layer journal is now readable and revertible through
+`/memory/mine/journal`, with the same chat-device scope as its file route, while
+the team layer stays untouched. The button appears only when the journal entry
+says it can be reverted. When
 the journal says a change cannot be restored (too large, or text that had to be
 redacted), the recorded reason is shown instead. The offer is cleared by the
 next write, so a later edit cannot be silently overwritten by a stale undo.
 
 ## Not covered
 
-Team Cloud member-layer journals still have no read route (own-layer edits cannot
-be undone yet), note-level editing and undo inside the panel are not added here,
+Note-level editing (changing a note's words in place) is not added here,
 and a structured "research finding" memory type with source URL and access date
 does not exist. Real-browser and mobile smoke tests were not run for this slice.

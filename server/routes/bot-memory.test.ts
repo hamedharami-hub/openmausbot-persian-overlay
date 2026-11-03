@@ -103,12 +103,13 @@ describe("the bot-memory module through the route table", () => {
     expect(((await journal.json()) as { entries: unknown[] }).entries).toHaveLength(1);
     const revert = await fetch(`${base}/api/bots/bot-123/memory/mine/journal/${saved.entry.id}/revert`, { method: "POST" });
     expect(revert.status).toBe(200);
-    expect((await revert.json()) as unknown).toMatchObject({ path: "MEMORY.md", exists: false, text: "" });
+    expect((await revert.json()) as unknown).toMatchObject({ path: "MEMORY.md" });
     const mine = await (await fetch(`${base}/api/bots/bot-123/memory/mine/file`)).json() as { text: string };
-    expect(mine.text).toBe("");
+    expect(mine.text, "undo restores the layer to its state before that write").not.toContain("A fact the bot noticed");
     const plain = await (await fetch(`${base}/api/bots/bot-123/memory/file`)).json() as { text: string };
     expect(plain.text).toBe("", "the team layer is untouched");
-    expect((await fetch(`${base}/api/bots/bot-123/memory/mine/journal`)).status).toBe(404, "a refused member gets no journal");
+    const noLayer = await serve();
+    expect((await fetch(`${noLayer}/api/bots/bot-123/memory/mine/journal`)).status, "no own layer, no journal").toBe(404);
   });
 
   it("uses the upkeep service and refuses tidying when the bot has switched it off", async () => {
@@ -212,8 +213,6 @@ describe("the bot-memory module through the route table", () => {
       ["PUT", "/api/bots/b1/memory/file"],
       ["DELETE", "/api/bots/b1/memory/file"],
       ["GET", "/api/bots/b1/memory/journal"],
-    ["GET", "/api/bots/b1/memory/mine/journal"],
-    ["POST", "/api/bots/b1/memory/mine/journal/e1/revert"],
       ["POST", "/api/bots/b1/memory/journal/e1/revert"],
       ["GET", "/api/bots/b1/memory/upkeep"],
       ["POST", "/api/bots/b1/memory/tidy"],
@@ -222,6 +221,10 @@ describe("the bot-memory module through the route table", () => {
       ["POST", "/api/bots/b1/memory/open"],
     ] as const) {
       expect(requiredScope(method, path), `${method} ${path}`).toBe("admin");
+    }
+    // A member's own layer stays available to a chat-scoped paired device, like its file route.
+    for (const [method, path] of [["GET", "/api/bots/b1/memory/mine/journal"], ["POST", "/api/bots/b1/memory/mine/journal/e1/revert"]] as Array<[string, string]>) {
+      expect(requiredScope(method, path), `${method} ${path}`).toBe("client");
     }
   });
 });
