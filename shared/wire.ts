@@ -445,6 +445,8 @@ export const EXCERPT_SUMMARY_HEADER = "Historical excerpts in chronological orde
 
 /** One transcript line, serialized as stored. */
 export interface WireMessage extends HelperIntroField, SetupCardFields, WaitLineField, BugReportField {
+  /** Server-owned, independent DOM observation; never raw page content. */
+  researchContent?: import("./research-evidence.ts").ResearchContentReceipt;
   roomRequest?: { id: string; phase: "request" | "result" };
   id: string;
   role: "bot" | "user";

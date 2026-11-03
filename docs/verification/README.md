@@ -47,6 +47,7 @@ Use only mapped, tested commands:
 - [Chat turns](chat-turns.md)
 - [Request-scoped research controls](research-request.md)
 - [Research request receipts](research-mission.md)
+- [Browser content observations and answer references](research-content.md)
 - [Conversation context compaction](context-compaction.md)
 - [Work summaries and engine hooks](digests.md)
 - [OpenAI-compatible structured tools](openai-tools.md)

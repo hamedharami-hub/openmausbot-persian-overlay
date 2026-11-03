@@ -22,6 +22,9 @@ describe("request-scoped research guidance", () => {
           expect(instructions).toContain("real web evidence");
           expect(instructions).toContain("Open and read relevant pages");
           expect(instructions).toContain("Never fabricate");
+          expect(instructions).toContain("without a url argument");
+          expect(instructions).toContain("date of the underlying data");
+          expect(instructions).toContain("mark it unknown");
           expect(instructions).toContain("not enforced");
           expect(instructions).toContain("grant no tools or permissions");
         }

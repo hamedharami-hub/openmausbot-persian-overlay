@@ -132,6 +132,7 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   text?: string;
   digest?: TurnDigest;
   research?: import("../../shared/research-request").ResearchRequest;
+  researchContent?: import("../../shared/research-evidence").ResearchContentReceipt;
   compaction?: import("../../shared/wire").WireMessage["compaction"];
   attachments?: import("../../shared/wire").WireMessage["attachments"];
   card?: OptionCardData;

@@ -230,6 +230,11 @@ lines.on('line', line => {
   else if (m.params.name === 'agent_browser_snapshot' && process.env.FAIL_VERIFICATION === '1') result = { isError:true, content:[{type:'text',text:'Snapshot unavailable'}] };
   // LEAK: a page that shows a filled password back, in every kind of result.
   else if (process.env.LEAK && m.params.name !== 'agent_browser_get_url') result = { content:[{type:'text',text:'page says ' + process.env.LEAK},{type:'image',data:'AAAA',mimeType:'image/png'}], structuredContent:{ value: process.env.LEAK } };
+  else if (m.params.name === 'agent_browser_read' && process.env.READ_RESULT) result = JSON.parse(process.env.READ_RESULT);
+  else if (m.params.name === 'agent_browser_eval' && process.env.OBSERVATION) {
+    const answer = () => process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{content:[{type:'text',text:process.env.OBSERVATION}]}})+'\\n');
+    setTimeout(answer, Number(process.env.OBSERVATION_DELAY || 0)); return;
+  }
   else if (m.params.name === 'agent_browser_eval' && process.env.FAIL_EVAL === '1') result = { isError:true, content:[{type:'text',text:'Evaluation failed'}] };
   else if (m.params.name === 'agent_browser_eval') result = { content:[{type:'text',text:JSON.stringify(JSON.stringify({ url:'http://fixture.test/', title:'Fixture', text:pageText + '\\nSay hello' }))}] };
   else if (m.params.name === 'agent_browser_click' && m.params.arguments.selector === '#missing') result = { isError:true, content:[{type:'text',text:'Element not found: #missing'}] };
@@ -253,6 +258,90 @@ function daemonSpec(): { spec: BrowserSpawnSpec; busy: string; calls: () => stri
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }
+
+describe("research DOM observations", () => {
+  const ctx = (): StepContext => ({ botId: "bot", botName: "Fixture", threadId: "thread", generation: "generation", turnId: () => "turn", record: false });
+  const observedSpec = () => {
+    const daemon = daemonSpec();
+    daemon.spec.env.OBSERVATION = JSON.stringify({ url: "https://example.com/article", title: "Fixture", text: "Fixture SECRET", originalLength: 14, truncated: false });
+    return daemon;
+  };
+  it("emits bounded scrubbed facts after exactly one successful read, without a provider item association", async () => {
+    const onContentReceived = vi.fn();
+    const value = runtime({ onContentReceived, scrub: (text) => text.replaceAll("SECRET", "MASK") });
+    const daemon = observedSpec();
+    try {
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} }, undefined, ctx());
+      expect(daemon.calls()).toEqual(["agent_browser_read", "agent_browser_eval"]);
+      expect(onContentReceived).toHaveBeenCalledWith({ threadId: "thread", generation: "generation", turnId: "turn" }, expect.objectContaining({ capturedChars: 12, requestedUrl: null, hashBasis: "scrubbed-dom-visible-text" }));
+      expect(JSON.stringify(onContentReceived.mock.calls)).not.toContain("SECRET");
+      expect(JSON.stringify(onContentReceived.mock.calls)).not.toContain("Fixture MASK");
+    } finally { daemon.cleanup(); }
+  });
+  it.each([{}, { content: [] }, { content: [{ type: "text", text: "  " }] }, { content: [{ type: "image", data: "AAAA" }] }, { isError: true, content: [{ type: "text", text: "failure" }] }])("does not observe unsuccessful or textless read %j", async (readResult) => {
+    const onContentReceived = vi.fn();
+    const value = runtime({ onContentReceived });
+    const daemon = observedSpec();
+    daemon.spec.env.READ_RESULT = JSON.stringify(readResult);
+    try {
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} }, undefined, ctx());
+      expect(daemon.calls()).toEqual(["agent_browser_read"]);
+      expect(onContentReceived).not.toHaveBeenCalled();
+    } finally { daemon.cleanup(); }
+  });
+  it("does not observe other tools, URL-bearing reads, or missing turn context", async () => {
+    const onContentReceived = vi.fn();
+    const value = runtime({ onContentReceived });
+    const daemon = observedSpec();
+    try {
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_get_text", arguments: {} }, undefined, ctx());
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: { url: "https://example.com" } }, undefined, ctx());
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} });
+      expect(daemon.calls()).toEqual(["agent_browser_get_text", "agent_browser_read"]);
+      expect(onContentReceived).not.toHaveBeenCalled();
+    } finally { daemon.cleanup(); }
+  });
+  it("does not let a failing callback change or retry the read", async () => {
+    const value = runtime({ onContentReceived: () => { throw new Error("persistence failure"); } });
+    const daemon = observedSpec();
+    try {
+      const result = await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} }, undefined, ctx());
+      expect(result).not.toHaveProperty("isError", true);
+      expect(daemon.calls().filter((name) => name === "agent_browser_read")).toHaveLength(1);
+    } finally { daemon.cleanup(); }
+  });
+  it("guards internal eval while a secret is held", async () => {
+    const onContentReceived = vi.fn();
+    const value = runtime({ onContentReceived });
+    const daemon = observedSpec();
+    try {
+      await value.withSecretInput("s", daemon.spec, async () => ({ ok: true, text: "filled", held: { url: "http://fixture.test/after", ms: 60_000 } }));
+      await value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} }, undefined, ctx());
+      expect(daemon.calls()).toEqual(["agent_browser_read", "agent_browser_get_url"]);
+      expect(onContentReceived).not.toHaveBeenCalled();
+    } finally { daemon.cleanup(); }
+  });
+  it.each(["empty", "stale", "takeover", "deadline"])("suppresses %s observations", async (mode) => {
+    const onContentReceived = vi.fn();
+    const value = runtime({ onContentReceived, ...(mode === "deadline" ? { callBudgetMs: 150, followUpReserveMs: 10 } : {}) });
+    const daemon = observedSpec();
+    daemon.spec.env.OBSERVATION_DELAY = "60";
+    if (mode === "empty") daemon.spec.env.OBSERVATION = JSON.stringify({ url: "https://example.com", title: "", text: "" });
+    if (mode === "deadline") daemon.spec.env.OBSERVATION_DELAY = "250";
+    let stale = false;
+    try {
+      const pending = value.agentRpc("s", daemon.spec, "tools/call", { name: "agent_browser_read", arguments: {} }, () => { if (stale) throw new Error("stale"); }, ctx()).catch(() => undefined);
+      const until = Date.now() + 2000;
+      while (!daemon.calls().includes("agent_browser_eval") && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(daemon.calls()).toContain("agent_browser_eval");
+      if (mode === "stale") stale = true;
+      if (mode === "takeover") void value.take("s", "person").catch(() => undefined);
+      await pending;
+      await new Promise((resolve) => setTimeout(resolve, mode === "deadline" ? 270 : 70));
+      expect(onContentReceived).not.toHaveBeenCalled();
+    } finally { daemon.cleanup(); }
+  });
+});
 
 describe("server-owned browser MCP runtime", () => {
   it.runIf(process.platform === "linux")("starts a bot's browser engine first in line when memory runs out, before the server", async () => {

@@ -50,12 +50,29 @@ export function ResearchMissionCard({ request, messages, partial = false }: { re
                     </a>
                   ) : <span dir="ltr" className="block break-all">{compact(source.url, 180)}</span>}
                   <div className="flex flex-wrap gap-1">
+                    {Boolean(source.observations?.length) && <span className="rounded border border-hairline/45 px-1.5 py-0.5 text-[11px]">{t("research.mission.content.received")}</span>}
                     {EVIDENCE_KINDS.filter((kind) => source.mentions.some((mention) => mention.kind === kind)).map((kind) => (
                       <span key={kind} className="rounded border border-hairline/45 px-1.5 py-0.5 text-[11px]">
                         {t(`research.mission.evidence.${kind}`)}
                       </span>
                     ))}
                   </div>
+                  {source.observations?.length ? <div className="space-y-2 rounded-lg bg-ink/[0.025] p-2">
+                    <p>{t("research.mission.content.scope")}</p>
+                    {source.observations.map((observation) => <dl key={`${observation.observedAt}:${observation.contentHash}`} className="space-y-1">
+                      <div><dt className="inline">{t("research.mission.content.observedAt")} </dt><dd className="inline"><time dateTime={new Date(observation.observedAt).toISOString()} dir="ltr">{new Date(observation.observedAt).toISOString()}</time></dd></div>
+                      <div><dt className="inline">{t("research.mission.content.length")} </dt><dd className="inline">{observation.capturedChars} · {t(observation.truncated ? "research.mission.content.partial" : "research.mission.content.bounded")}</dd></div>
+                      <div><dt className="inline">{t("research.mission.content.published")} </dt><dd className="inline">{compact(observation.publishedAt, 120) || t("research.mission.content.unknown")}</dd></div>
+                      <div><dt className="inline">{t("research.mission.content.modified")} </dt><dd className="inline">{compact(observation.modifiedAt, 120) || t("research.mission.content.unknown")}</dd></div>
+                      <div><dt className="inline">{t("research.mission.content.dataDate")} </dt><dd className="inline">{t("research.mission.content.unknown")}</dd></div>
+                      <div><dt className="inline">SHA-256 </dt><dd className="inline"><code dir="ltr" title={observation.contentHash}>{observation.contentHash.slice(0, 12)}…</code></dd></div>
+                    </dl>)}
+                  </div> : <p>{t("research.mission.content.missing")}</p>}
+                  {Boolean(source.references?.length) && <details className="rounded-lg bg-ink/[0.025] p-2">
+                    <summary className="cursor-pointer">{t("research.mission.references.title")}</summary>
+                    <p className="mt-1">{t("research.mission.references.disclaimer")}</p>
+                    {source.references?.map((reference, index) => <blockquote key={`${reference.messageId}:${index}`} dir="auto" className="mt-2 border-s-2 border-hairline ps-2">{reference.text}</blockquote>)}
+                  </details>}
                 </li>
               );
             })}

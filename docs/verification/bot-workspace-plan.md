@@ -2,7 +2,7 @@
 
 Status: approved scope; implementation is incremental. A checked item requires a named verification artifact, not a model's claim.
 
-Delivered slices: milestone 1 request controls (`research-request.md`); milestone 2a request-linked lifecycle receipts and conservative URL evidence (`research-mission.md`). Milestone 2 is not complete: a URL reference is not a retrieved-content receipt or verified claim.
+Delivered slices: milestone 1 request controls (`research-request.md`); milestone 2a request-linked lifecycle receipts and conservative URL evidence (`research-mission.md`); milestone 2b narrow browser DOM observations and answer references (`research-content.md`). Milestone 2 is not complete: neither a URL reference nor a content observation is a verified claim.
 
 ## Scope
 

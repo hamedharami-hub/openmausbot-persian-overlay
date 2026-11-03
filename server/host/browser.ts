@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { Audience } from "../audience.ts";
+import type { ContentReceived } from "../research-content.ts";
 import type { CloudLendingRefusal } from "../cloud-lending.ts";
 import type { AppConfig } from "../config.ts";
 import { browserEngineAttachCdpUrl, browserProfilePartitionId, browserProfilePartitionTarget, builtInBrowserEnabled, DATA_DIR } from "../config.ts";
@@ -51,6 +52,7 @@ import type { Store } from "../store.ts";
 import type { TurnOwner, TurnResources } from "../turn-resources.ts";
 
 export interface BrowserHostDeps {
+  onContentReceived?: ContentReceived;
   cfg: AppConfig;
   /** The store is built after this host, so it is read when used. */
   store(): Pick<Store, "bots" | "bot" | "botByThread">;
@@ -107,6 +109,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
       throw error instanceof RelayTimeout ? new TransportError(error.message) : error;
     }),
     steps: browserSteps,
+    onContentReceived: deps.onContentReceived,
     onTiming: process.env.OMB_BROWSER_TIMING === "1" ? (timing) => console.info(formatBrowserTiming(timing)) : undefined,
   });
   const browserBox = deps.browserBox;

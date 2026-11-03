@@ -56,7 +56,11 @@ changed by verification.
 
 ## Remaining scope
 
-A typed retrieval receipt with returned content, publication/data/check dates,
+The next slice, `research-content.md`, adds a narrow agent-browser DOM observation
+receipt and answer-reference excerpts. It does not turn URL mentions into
+verified claims or cover all browser/provider routes.
+
+A general typed retrieval receipt with returned content, publication/data/check dates,
 claim-to-source links and independent-source analysis is still missing. So are
 mission editing and resume orchestration. No real-provider research quality,
 mobile screenshots, or factual truth is proven by these fixture tests.

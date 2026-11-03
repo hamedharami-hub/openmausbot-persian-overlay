@@ -34,6 +34,23 @@ beforeEach(() => {
 });
 
 describe("ResearchMissionCard", () => {
+  it("displays observation time separately from unverified page dates and never assumes a data date", () => {
+    const entry = source("https://example.com/report", ["citation"]);
+    entry.observations = [{ version: 1, source: "agent-browser-dom", url: entry.url, observedAt: 1_790_000_000_000,
+      contentHash: "d".repeat(64), capturedChars: 1024, truncated: true, hashBasis: "scrubbed-dom-visible-text", requestedUrl: null,
+      publishedAt: "2020-01-01" }];
+    entry.references = [{ messageId: "answer", text: "The model claims <script>bad()</script> with this source", at: 3 }];
+    mission.sources = [entry];
+    const html = render();
+    expect(html).toContain("research.mission.content.received");
+    expect(html).toContain("research.mission.content.observedAt");
+    expect(html).toContain("2020-01-01");
+    expect(html).toContain("research.mission.content.partial");
+    expect(html).toContain("research.mission.content.unknown");
+    expect(html).toContain("research.mission.references.disclaimer");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
+  });
   it("discloses incomplete older history instead of presenting full coverage", () => {
     const html = renderToStaticMarkup(createElement(ResearchMissionCard, { request, messages: [], partial: true }));
     expect(html).toContain("research.mission.partial");

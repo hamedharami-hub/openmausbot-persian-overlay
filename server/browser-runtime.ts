@@ -6,6 +6,7 @@ import { PageSizes, type PageSize } from "./browser-page-size.ts";
 import { SECRET_ON_PAGE, SecretHolds, type SecretHold } from "./browser-secret-hold.ts";
 import type { BrowserSteps, StepCall, StepContext } from "./browser-steps.ts";
 import { HARNESS_CALL_BUDGET_MS } from "./harness-budget.ts";
+import { researchContentReceipt, type ContentReceived, type ResearchContentOwner } from "./research-content.ts";
 
 export interface BrowserSpawnSpec {
   command: string;
@@ -350,8 +351,9 @@ export class BrowserRuntime {
   /** Strips held secrets (a filled password, a one-time code) from every tool result before the bot reads it. */
   private scrub: (text: string) => string;
   private onTiming?: (timing: BrowserTiming) => void;
+  private onContentReceived?: ContentReceived;
 
-  constructor({ closeBrowser, applyViewport, launch, relayCommand, steps, scrub, onTiming, ...options }: Partial<BrowserRuntime["options"]> & { closeBrowser?: CloseBrowser; applyViewport?: ApplyViewport; launch?: BrowserLaunch; relayCommand?: RelayCommand; steps?: BrowserRuntime["steps"]; scrub?: (text: string) => string; onTiming?: (timing: BrowserTiming) => void } = {}) {
+  constructor({ closeBrowser, applyViewport, launch, relayCommand, steps, scrub, onTiming, onContentReceived, ...options }: Partial<BrowserRuntime["options"]> & { closeBrowser?: CloseBrowser; applyViewport?: ApplyViewport; launch?: BrowserLaunch; relayCommand?: RelayCommand; steps?: BrowserRuntime["steps"]; scrub?: (text: string) => string; onTiming?: (timing: BrowserTiming) => void; onContentReceived?: ContentReceived } = {}) {
     this.options = { ...BROWSER_CALL_DEFAULTS, takeoverTimeoutMs: 15_000, idleMs: 60_000, maxPending: 16, resultBudget: DEFAULT_BROWSER_RESULT_BUDGET, recoveryCheckMs: 30_000, ...options };
     this.closeBrowser = closeBrowser ?? (async () => false);
     this.applyViewport = applyViewport;
@@ -360,6 +362,7 @@ export class BrowserRuntime {
     this.steps = steps;
     this.scrub = scrub ?? scrubHeldSecrets;
     this.onTiming = onTiming;
+    this.onContentReceived = onContentReceived;
   }
 
   private timed<T>(session: string, tool: string, phases: Partial<BrowserTiming>, fn: () => Promise<T>): Promise<T> {
@@ -447,6 +450,8 @@ export class BrowserRuntime {
 
   /** Every tool result, recovery notes included, is scrubbed of held secrets. */
   async agentRpc(session: string, spec: BrowserSpawnSpec, method: "tools/list" | "tools/call", params: unknown, beforeDispatch?: () => void, ctx?: StepContext): Promise<unknown> {
+    const turnId = ctx?.turnId();
+    const contentOwner = ctx && turnId ? { threadId: ctx.threadId, generation: ctx.generation, turnId } : undefined;
     if (method === "tools/call" && readsAroundBrowser(params)) return { isError: true, content: [{ type: "text", text: READ_OPEN_PAGE_ONLY }] };
     // Counted in the same event-loop turn, so no idle close can start under a call.
     for (let closing = this.gates.get(session)?.idleClose; closing; closing = this.gates.get(session)?.idleClose) await closing;
@@ -456,7 +461,7 @@ export class BrowserRuntime {
     const deadline = Date.now() + this.options.callBudgetMs;
     let result: unknown;
     try {
-      const request = () => this.agentRequest(session, spec, method, params, deadline, beforeDispatch, ctx);
+      const request = () => this.agentRequest(session, spec, method, params, deadline, beforeDispatch, ctx, contentOwner);
       const work = method !== "tools/call" || toolNameOf(params) === BROWSER_RESTART_TOOL || gate.uncertain ? request() : this.lanes.run(session, request, this.options.laneWaitMs);
       result = await this.withinBudget(session, method, toolNameOf(params) ?? "browser", work, deadline);
     } finally { gate.calls--; gate.lastUsed = Date.now(); }
@@ -481,7 +486,7 @@ export class BrowserRuntime {
     return this.gate(session).lostCall === null ? stuckBrowserToolError() : lostCallToolError(call);
   }
 
-  private async agentRequest(session: string, spec: BrowserSpawnSpec, method: "tools/list" | "tools/call", params: unknown, deadline: number, beforeDispatch?: () => void, ctx?: StepContext): Promise<unknown> {
+  private async agentRequest(session: string, spec: BrowserSpawnSpec, method: "tools/list" | "tools/call", params: unknown, deadline: number, beforeDispatch?: () => void, ctx?: StepContext, contentOwner?: ResearchContentOwner): Promise<unknown> {
     if (method !== "tools/list" && method !== "tools/call") throw new Error("Unsupported browser method.");
     // tools/list skips withAgentAction, so it must refuse the closing window itself or its client outlives restart().
     if (method !== "tools/call" && this.gate(session).closing) throw new Error("The browser is closing. Try again shortly.");
@@ -544,12 +549,19 @@ export class BrowserRuntime {
         phases.stepsMs = performance.now() - stepsStarted;
         // Read with eval, not a snapshot: agent-browser's snapshot renumbers every @eN ref the model holds.
         const observePage = async (): Promise<PageState | null> => {
-          if (followUpMs() <= 0) return null;
+          const observationAllowed = () => {
+            beforeDispatch?.();
+            return followUpMs() > 0 && gate.owner === null && !gate.uncertain && !gate.closing;
+          };
+          if (!observationAllowed()) return null;
+          if (await this.holds.refuses(session, pageUrl)) return null;
+          if (!observationAllowed()) return null;
           const observeStarted = performance.now();
           try {
-            return parsePageState(await entry.client.rpc("tools/call", {
+            const observed = await entry.client.rpc("tools/call", {
               name: "agent_browser_eval", arguments: { script: OBSERVE_PAGE_SCRIPT, timeoutMs: 5_000 },
-            }, followUpMs()));
+            }, Math.min(5_000, followUpMs()));
+            return observationAllowed() ? parsePageState(observed) : null;
           } catch (error) {
             if (error instanceof TransportError) throw error;
             return null;
@@ -625,6 +637,23 @@ export class BrowserRuntime {
         const extra = call && stepState ? await this.steps!.after(call, result, stepState, phases.engineMs) : null;
         phases.stepsMs = (phases.stepsMs ?? 0) + performance.now() - afterStarted;
         beforeDispatch?.();
+        if (method === "tools/call" && this.onContentReceived && contentOwner && toolName === "agent_browser_read" &&
+            (!args || typeof args === "object" && !Object.hasOwn(args, "url")) &&
+            result && typeof result === "object" && (result as { isError?: unknown }).isError !== true &&
+            Array.isArray((result as { content?: unknown }).content) &&
+            (result as { content: unknown[] }).content.some((part) => part && typeof part === "object" &&
+              (part as { type?: unknown }).type === "text" && typeof (part as { text?: unknown }).text === "string" &&
+              (part as { text: string }).text.trim().length > 0)) {
+          // Observation and persistence failures must not retry or change the successful read.
+          try {
+            const page = await observePage();
+            beforeDispatch?.();
+            if (page && followUpMs() > 0 && gate.owner === null && !gate.uncertain && !gate.closing) {
+              const receipt = researchContentReceipt(page, this.scrub);
+              if (receipt) void Promise.resolve(this.onContentReceived(contentOwner, receipt)).catch(() => undefined);
+            }
+          } catch { /* Best-effort evidence, independent of the tool result. */ }
+        }
         const shaped = shapeBrowserToolResult(result, { toolName, budget: this.options.resultBudget }) as { content?: unknown[] };
         const final = extra?.parts.length && Array.isArray(shaped?.content) ? { ...shaped, content: [...shaped.content, ...extra.parts] } : shaped;
         phases.chars = resultChars(final);

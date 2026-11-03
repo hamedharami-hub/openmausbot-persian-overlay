@@ -1,8 +1,16 @@
 import type { Message } from "@/state/store";
+import type { ResearchContentReceipt } from "../../shared/research-evidence";
 
 export type ResearchMissionStatus = "sending" | "pending" | "responded" | "failed" | "cancelled" | "unknown";
 export interface ResearchSourceMention { messageId: string; kind: "citation" | "tool-output" | "failed-attempt"; at: number }
-export interface ResearchSource { url: string; hostname: string; mentions: ResearchSourceMention[] }
+export interface ResearchAnswerReference { messageId: string; text: string; at: number }
+export interface ResearchSource {
+  url: string;
+  hostname: string;
+  mentions: ResearchSourceMention[];
+  observations?: ResearchContentReceipt[];
+  references?: ResearchAnswerReference[];
+}
 export interface ResearchMission {
   requestId: string;
   status: ResearchMissionStatus;
@@ -56,6 +64,15 @@ export function researchMission(request: Message, messages: readonly Message[]):
     : "unknown";
   const sources = new Map<string, ResearchSource>();
   let sourcesTruncated = false, scanned = 0;
+  const sourceFor = (raw: string): ResearchSource | null => {
+    const url = publicUrl(raw);
+    if (!url) return null;
+    const existing = sources.get(url.href);
+    if (!existing && sources.size >= MAX_SOURCES) { sourcesTruncated = true; return null; }
+    const source: ResearchSource = existing ?? { url: url.href, hostname: url.hostname, mentions: [] };
+    sources.set(url.href, source);
+    return source;
+  };
   const add = (text: string | undefined, message: Message, kind: ResearchSourceMention["kind"]) => {
     if (!text) return;
     if (scanned >= MAX_SCAN) { sourcesTruncated = true; return; }
@@ -64,19 +81,38 @@ export function researchMission(request: Message, messages: readonly Message[]):
     if (sample.length < text.length) sourcesTruncated = true;
     scanned += sample.length;
     for (const match of sample.matchAll(/https?:\/\/[^\s<>"'`]+/giu)) {
-      const url = publicUrl(match[0]);
-      if (!url) continue;
-      const key = url.href;
-      const existing = sources.get(key);
-      if (!existing && sources.size >= MAX_SOURCES) { sourcesTruncated = true; continue; }
-      const source = existing ?? { url: key, hostname: url.hostname, mentions: [] };
+      const source = sourceFor(match[0]);
+      if (!source) continue;
       if (source.mentions.length < 6 && !source.mentions.some((mention) => mention.messageId === message.id && mention.kind === kind)) {
         source.mentions.push({ messageId: message.id, kind, at: message.at });
       }
-      sources.set(key, source);
+      if (kind === "citation") {
+        const start = Math.max(sample.lastIndexOf("\n", match.index) + 1, match.index - 240);
+        const lineEnd = sample.indexOf("\n", match.index);
+        const end = Math.min(lineEnd < 0 ? sample.length : lineEnd, match.index + match[0].length + 160);
+        const text = sample.slice(start, end).replace(/\[([^\]]{0,160})\]\(https?:\/\/[^)]+\)/giu, "$1")
+          .replace(/https?:\/\/[^\s<>"'`]+/giu, "").replace(/\s+/gu, " ").trim().slice(0, 350);
+        const references = source.references ?? (source.references = []);
+        if (text.length >= 16 && references.length < 4 && !references.some((ref) => ref.messageId === message.id && ref.text === text)) {
+          references.push({ messageId: message.id, text, at: message.at });
+        }
+      }
     }
   };
   for (const message of owned) {
+    const receipt = message.researchContent;
+    if (receipt?.version === 1 && receipt.source === "agent-browser-dom" && receipt.hashBasis === "scrubbed-dom-visible-text"
+      && /^[a-f0-9]{64}$/u.test(receipt.contentHash) && Number.isInteger(receipt.capturedChars) && receipt.capturedChars > 0
+      && receipt.capturedChars <= 200_000 && Number.isFinite(receipt.observedAt) && receipt.observedAt > 0 && receipt.observedAt <= 8_640_000_000_000_000) {
+      const source = sourceFor(receipt.url);
+      if (source) {
+        const observations = source.observations ?? (source.observations = []);
+        if (!observations.some((value) => value.contentHash === receipt.contentHash && value.observedAt === receipt.observedAt)) {
+          if (observations.length < 6) observations.push(receipt);
+          else sourcesTruncated = true;
+        }
+      }
+    }
     if (message.kind === "text" && !message.webhookPost) add(message.text, message, "citation");
     if (message.tool?.ok === true) add(message.tool.output, message, "tool-output");
     if (message.tool?.ok === false) add(message.tool.input, message, "failed-attempt");

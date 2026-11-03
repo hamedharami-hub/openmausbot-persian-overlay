@@ -133,8 +133,8 @@ describe("browser tool shaping", () => {
 
   it("reads the page state eval returns as a JSON string", () => {
     const state = { url: "https://example.test/", title: "Example", text: "Ready" };
-    expect(parsePageState({ content: [{ type: "text", text: JSON.stringify(JSON.stringify(state)) }] })).toEqual(state);
-    expect(parsePageState({ content: [{ type: "text", text: JSON.stringify(state) }] })).toEqual(state);
+    expect(parsePageState({ content: [{ type: "text", text: JSON.stringify(JSON.stringify(state)) }] })).toEqual({ ...state, originalLength: 5, truncated: false });
+    expect(parsePageState({ content: [{ type: "text", text: JSON.stringify(state) }] })).toEqual({ ...state, originalLength: 5, truncated: false });
     expect(parsePageState({ isError: true, content: [{ type: "text", text: JSON.stringify(JSON.stringify(state)) }] })).toBeNull();
     expect(parsePageState({ content: [{ type: "text", text: "\"not a page\"" }] })).toBeNull();
   });

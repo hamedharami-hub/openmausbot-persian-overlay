@@ -64,11 +64,11 @@ export function withoutLifecycle(text: string): string {
   return JSON.stringify({ ...parsed, data });
 }
 
-export interface PageState { url: string; title: string; text: string }
+export interface PageState { url: string; title: string; text: string; originalLength?: number; truncated?: boolean; publishedAt?: string; modifiedAt?: string }
 
 /** agent-browser renumbers every @eN ref on each snapshot, so the page is read with eval and a model's refs stay valid. */
 export const OBSERVE_PAGE_SCRIPT =
-  "JSON.stringify({ url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 200000) })";
+  "(() => { const text = document.body ? document.body.innerText : ''; const date = (selector) => document.querySelector(selector)?.getAttribute('content')?.slice(0, 120); return JSON.stringify({ url: location.href, title: document.title, text: text.slice(0, 200000), originalLength: text.length, truncated: text.length > 200000, publishedAt: date('meta[property=\"article:published_time\"],meta[itemprop=\"datePublished\"],meta[name=\"datePublished\"]'), modifiedAt: date('meta[property=\"article:modified_time\"],meta[itemprop=\"dateModified\"],meta[name=\"dateModified\"]') }); })()";
 
 export function parsePageState(result: unknown): PageState | null {
   if (!isRecord(result) || result.isError === true || !Array.isArray(result.content)) return null;
@@ -77,7 +77,12 @@ export function parsePageState(result: unknown): PageState | null {
     let value: unknown = JSON.parse(text?.text ?? "");
     if (typeof value === "string") value = JSON.parse(value);
     if (isRecord(value) && typeof value.url === "string" && typeof value.title === "string" && typeof value.text === "string") {
-      return { url: value.url, title: value.title, text: value.text };
+      const originalLength = typeof value.originalLength === "number" && Number.isSafeInteger(value.originalLength) && value.originalLength >= value.text.length
+        ? value.originalLength : value.text.length;
+      return { url: value.url, title: value.title, text: value.text.slice(0, 200_000), originalLength,
+        truncated: value.truncated === true || originalLength > 200_000,
+        ...(typeof value.publishedAt === "string" ? { publishedAt: value.publishedAt.slice(0, 120) } : {}),
+        ...(typeof value.modifiedAt === "string" ? { modifiedAt: value.modifiedAt.slice(0, 120) } : {}) };
     }
   } catch {}
   return null;
