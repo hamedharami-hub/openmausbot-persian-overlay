@@ -25,6 +25,10 @@ for it, and it does not change how bots answer in writing.
   key in the URL query, as the Live API requires. The key never appears in a
   message, a caption or a transcript.
 - Audio in is 16 kHz PCM, audio out is 24 kHz PCM.
+- Reply chunks are scheduled consecutively on one audio clock, not started
+  simultaneously. Interruption and hangup cancel every scheduled source.
+- Capture waits for setup readiness; late microphone grants after hangup
+  are immediately stopped. Browser echo cancellation remains enabled.
 
 ## Checks
 
@@ -34,6 +38,7 @@ pnpm exec tsc -p tsconfig.server.build.json --noEmit
 ```
 
 The route test drives a fake upstream and asserts the key never reaches the
-browser. The browser test uses a fake socket and never opens a microphone. A
+browser. Browser tests use a fake socket/audio clock to assert consecutive
+chunk start times, interruption cleanup, and late microphone-grant cleanup. A
 manual check on a real device is still needed for microphone permission,
 acoustic echo and the audible voice quality.

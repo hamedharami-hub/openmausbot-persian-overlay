@@ -11,6 +11,7 @@ export type LiveEvent =
   | { kind: "caption"; text: string; role: "user" | "assistant" }
   | { kind: "audio"; data: string; mimeType: string }
   | { kind: "turn"; complete: boolean }
+  | { kind: "interrupted" }
   | { kind: "closed"; reason: string }
   | { kind: "error"; message: string };
 
@@ -62,10 +63,12 @@ export function decodeGeminiLiveFrame(raw: string): LiveEvent[] {
   const serverContent = data.serverContent as {
     modelTurn?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string }; text?: string }> };
     turnComplete?: boolean;
+    interrupted?: boolean;
     outputTranscription?: { text?: string };
     inputTranscription?: { text?: string };
     interimInputTranscription?: { text?: string };
   } | undefined;
+  if (serverContent?.interrupted) events.push({ kind: "interrupted" });
   for (const part of serverContent?.modelTurn?.parts ?? []) {
     if (part.inlineData?.data) events.push({ kind: "audio", data: part.inlineData.data, mimeType: part.inlineData.mimeType ?? "audio/pcm;rate=24000" });
   }

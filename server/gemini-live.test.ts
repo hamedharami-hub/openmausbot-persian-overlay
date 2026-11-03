@@ -6,7 +6,6 @@ import {
   geminiLiveSetup,
   geminiLiveText,
   geminiLiveUrl,
-  type GeminiLiveSocket,
 } from "./gemini-live.ts";
 
 const cfg = { instances: { haramipourhamedgemini: { driver: "openai-compat", environment: { GEMINI_API_KEY: "secret-key" } } } } as never;
@@ -46,6 +45,7 @@ describe("Gemini Live protocol", () => {
     expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { inputTranscription: { text: "hi" } } }))).toEqual([{ kind: "caption", text: "hi", role: "user" }]);
     expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { interimInputTranscription: { text: "در حال" } } }))).toEqual([{ kind: "caption", text: "در حال", role: "user" }]);
     expect(decodeGeminiLiveFrame(JSON.stringify({ outputTranscription: { text: "سلام" } }))).toEqual([{ kind: "caption", text: "سلام", role: "assistant" }]);
+    expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { interrupted: true } }))).toEqual([{ kind: "interrupted" }]);
     expect(decodeGeminiLiveFrame("not json")).toEqual([]);
     expect(decodeGeminiLiveFrame(JSON.stringify({ usageMetadata: { totalTokenCount: 3 } }))).toEqual([]);
   });

@@ -1,7 +1,7 @@
 import { directMessageSent, roomMessageSent } from "@/lib/product-events";
 import { useComposerDictation } from "@/lib/use-composer-dictation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SetStateAction } from "react";
-import { ArrowUp, Clock, Mic, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Clock, Paperclip, Square, X } from "lucide-react";
 import { useStore, visibleMessages, currentTaskBot, type Bot, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
@@ -33,7 +33,7 @@ import { DEVS_CHOICE, MentionMenu, teammateChoices, type MentionChoice } from ".
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { MentionTextarea } from "./MentionTextarea";
 import { ComposerAttachments, pathForFile } from "./ComposerAttachments";
-import { PointedChips } from "./app/PointedChips"; import { SetupRequestChip, setupRequestPlaceholder } from "./SetupOffer";
+import { PointedChips } from "./app/PointedChips"; import { SetupRequestChip } from "./SetupOffer";
 import { takePointedChips } from "@/lib/pointed-chips";
 import { splitTranscriptCitations, type CitationAttachment } from "@/lib/citations";
 import { PlaceChip } from "./PlaceChip";
@@ -61,13 +61,12 @@ import {
   type Attachment,
   type PasteAttachment,
 } from "@/lib/composer-attachments";
-import { goalCoordinatorForComposer, jevRoomRoutingOn, openTaskWorking, roomRespondersForComposer } from "@/lib/group-routing";
-import { composerPlaceholder, sendLabels, SIMPLE_CONTROL, slotColors } from "./composer-simple";
+import { goalCoordinatorForComposer, openTaskWorking, roomRespondersForComposer } from "@/lib/group-routing";
+import { sendLabels, SIMPLE_CONTROL, slotColors } from "./composer-simple";
 import { PendingApprovalActions, PendingApprovalPanel, pendingApprovals } from "./PendingApproval";
-import { CallButton } from "./CallView";
+import { ComposerDictationButton } from "./ComposerDictationButton";
 import { GeminiLiveConversation } from "./GeminiLiveConversation";
 import { useGeminiVoiceConfigured } from "@/lib/use-gemini-configured";
-import { GroupCallButton } from "./GroupCallView";
 import { ApprovalChip, ComposerPlusMenu, GoalToggle } from "./ComposerPlusMenu";
 import { PhonePlus } from "./PhonePlus";
 import { useThreadApproval } from "./thread-approval";
@@ -130,7 +129,6 @@ export function Composer({
   const { threads, currentBotId } = useThreadRefs();
   const { capabilities } = useDesktopCapabilities();
   const advanced = useAdvancedMode();
-  // On a phone the composer is a dock: a round + (attach and every other tool), then one pill with the field, the mic and the voice button.
   const singleRow = useMediaQuery(PHONE_LAYOUT);
   // Simple mode on a wider screen: one pill holding a round +, the field, the mic and one round button in the bot's colour.
   const simpleDock = !advanced && !singleRow;
@@ -537,9 +535,7 @@ export function Composer({
   const callTarget = group?.id ?? bot?.id;
   const calling = callTarget !== undefined && (onCall === callTarget || (isLiveCallRunning(media.phase) && media.botId === callTarget));
   const stoppable = busy || Boolean(!group && bot?.waitingForTeammates);
-  // Simple mode's round button is the call, Send while there is text, and Stop while the bot works.
   const stopInSlot = simpleDock && stoppable && !locked && !hasContent && !calling;
-  const callShown = !simpleDock || (!hasContent && !stopInSlot);
   const slot = slotColors(bot?.color, Boolean(group));
   const sendNames = sendLabels({ simple: !advanced, busy, canSteer, name: busyName, sendLabel });
   const retryFailedSend = (failed: FailedComposerSend) => {
@@ -792,15 +788,17 @@ export function Composer({
             data-composer-backdrop
             className={cn("pointer-events-none absolute -left-5 -right-5 bg-app", advanced ? "-bottom-3 top-1/2" : cn("top-0", simpleDock ? "-bottom-4" : "-bottom-3"))}
           />
-        <div ref={shellRef} data-tour="composer" data-multiline={multiline ? "" : undefined} className={cn("@container/composer relative z-[1]", singleRow ? "flex items-end gap-2" : simpleDock ? cn(SIMPLE_COMPOSER, multiline ? "rounded-[18px]" : "rounded-[22px]") : cn("rounded-2xl px-2 py-1.5", ELEVATED_FLOAT))}>
+        <div ref={shellRef} data-tour="composer" data-multiline={multiline ? "" : undefined} className={cn("@container/composer relative z-[1] [&_[data-composer-plus]]:ring-0", singleRow ? cn("rounded-[26px] px-2 py-1.5", ELEVATED_FLOAT) : simpleDock ? cn(SIMPLE_COMPOSER, multiline ? "rounded-[18px]" : "rounded-[22px]") : cn("rounded-2xl px-2 py-1.5", ELEVATED_FLOAT))}>
+        <div className="contents">
+        {replyTo && <ComposerReplyStrip message={replyTo} fallbackName={bot?.name} onClear={onClearReply} />}
+        <div data-composer-row className={cn("flex items-end", simpleDock ? "gap-1.5" : "gap-1", advanced && !singleRow && "@max-[30rem]/composer:flex-wrap")}>
         {singleRow && !locked && (
-          <div className="flex shrink-0 items-center">
+          <div className="flex shrink-0 items-center [&_[data-composer-plus]]:size-8 [&_[data-composer-plus]]:bg-transparent [&_[data-composer-plus]]:ring-0">
             <PhonePlus
               onAttach={() => fileInput.current?.click()}
               goal={goal}
               teach={!advanced && canLearn ? teachTask : undefined}
               approval={approvalChoice && modeBot && { name: modeBot.name, choice: approvalChoice }}
-              callBotId={bot && !group ? bot.id : undefined}
               place={modeBot && !remoteClient && advanced ? {
                 bot: modeBot,
                 task: composerTask,
@@ -810,9 +808,6 @@ export function Composer({
             />
           </div>
         )}
-        <div className={singleRow ? cn("min-w-0 flex-1 rounded-[26px] px-3 py-1.5", ELEVATED_FLOAT) : "contents"}>
-        {replyTo && <ComposerReplyStrip message={replyTo} fallbackName={bot?.name} onClear={onClearReply} />}
-        <div data-composer-row className={cn("flex items-end", simpleDock ? "gap-1.5" : "gap-1", !simpleDock && "@max-[30rem]/composer:flex-wrap")}>
           <input
             ref={fileInput}
             type="file"
@@ -852,7 +847,7 @@ export function Composer({
             </div>
           )}
           <MentionTextarea
-          wrapperClassName={simpleDock ? undefined : "@max-[30rem]/composer:order-first @max-[30rem]/composer:basis-full"}
+          wrapperClassName={simpleDock || singleRow ? undefined : "@max-[30rem]/composer:order-first @max-[30rem]/composer:basis-full"}
           inputRef={inputRef}
           peers={[...(group ? members ?? [] : state.bots.filter((member) => member.id !== bot?.id)), ...teammates.peers]}
           everyone={Boolean(group && !group.dm)}
@@ -938,12 +933,6 @@ export function Composer({
           // is pending.
           disabled={blocking || locked}
           aria-busy={bot?.awaitingThreadSnapshot || undefined}
-          placeholder={composerPlaceholder({
-            simple: !advanced, locked: setupLocked, approval: blocking, attaching: attachmentPending, listening: recording,
-            replying: Boolean(replyTo), busy, canSteer, queued: pendingCount > 0, busyName, sendLabel, group, members: members ?? [],
-            jevOn: jevRoomRoutingOn(state.config), goal: channelMode === "goal", botName: bot?.name ?? "",
-            setupHint: group ? null : setupRequestPlaceholder(bot, threadId),
-          })}
           aria-label={t("composer.placeholder.bot", { name: group ? group.name : (bot?.name ?? "") })}
             className={cn(
               "block max-h-[9rem] w-full resize-none overflow-y-auto bg-transparent placeholder:text-ink-tertiary focus:outline-none",
@@ -971,16 +960,12 @@ export function Composer({
         )}
         {!locked && (!busy || recording || transcribing) && dictationAvailable && (
           <>
-          {cloudDictation && <select
-            aria-label={t("composer.cloudVoice.language")}
-            value={dictationLanguage}
-            disabled={recording || transcribing}
-            onChange={(event) => setDictationLanguage(event.target.value as "auto" | "fa" | "en")}
-            className="max-w-20 rounded-lg bg-inset px-1 py-1 text-[11px] text-ink-secondary"
-          >
-            <option value="auto">Auto</option><option value="fa">فارسی</option><option value="en">English</option>
-          </select>}
-          <button
+          <ComposerDictationButton
+            key={draftId}
+            language={dictationLanguage}
+            onLanguage={setDictationLanguage}
+            cloud={cloudDictation}
+            transcribing={transcribing}
             onClick={toggleMic}
             aria-label={transcribing ? t("composer.cloudVoice.cancel") : recording ? t("composer.dictation.stop") : t("composer.dictation.start")}
             className={cn(
@@ -991,17 +976,13 @@ export function Composer({
                 : advanced || singleRow ? "text-ink-secondary hover:bg-raised hover:text-ink" : SIMPLE_CONTROL,
             )}
             title={cloudDictation ? t(transcribing ? "composer.cloudVoice.cancel" : recording ? "composer.cloudVoice.finish" : "composer.cloudVoice.hint") : recording ? t("composer.dictation.stopHint") : t("composer.dictation.hint")}
-          >
-            {transcribing ? <span className="animate-pulse text-xs">…</span> : <Mic size={16} strokeWidth={1.75} absoluteStrokeWidth className="[&_rect]:fill-current" />}
-          </button>
+          />
           {cloudDictation && recording && <button type="button" onClick={stopDictation} aria-label={t("composer.cloudVoice.cancel")} className="px-1 text-xs text-danger">×</button>}
           </>
         )}
         {!locked && geminiLiveAvailable && (
           <GeminiLiveConversation threadId={bot?.threadId} className="flex-row items-center" />
         )}
-        {callShown && bot && !group && <CallButton bot={bot} placement="composer" fill={advanced || singleRow ? undefined : slot.fill} ink={slot.ink} inverse={singleRow} />}
-        {callShown && group && !advanced && <GroupCallButton group={group} members={members ?? []} placement="composer" fill={slot.fill} ink={slot.ink} />}
         {hasContent && !locked && (
           <button
             onClick={send}

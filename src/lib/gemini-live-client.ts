@@ -60,11 +60,26 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     : options.url;
   const socket = socketFactory(url);
   const state = options.onStateChange;
-  let context: AudioContext | null = options.audioContext ?? null;
+  const ownsContext = !options.audioContext;
+  let context: AudioContext | null = options.audioContext ?? (typeof AudioContext === "undefined" ? null : new AudioContext());
+  if (context) void context.resume().catch(() => {});
   let stream: MediaStream | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
   let processor: ScriptProcessorNode | null = null;
   let closed = false;
+  let ready = false;
+  let nextPlaybackTime = 0;
+  const playing = new Set<AudioBufferSourceNode>();
+
+  const stopPlayback = () => {
+    for (const node of playing) {
+      node.onended = null;
+      try { node.stop(); } catch { /* already ended */ }
+      node.disconnect();
+    }
+    playing.clear();
+    nextPlaybackTime = 0;
+  };
 
   const play = (base64: string, mimeType: string) => {
     const rate = Number(/rate=(\d+)/i.exec(mimeType)?.[1] ?? LIVE_OUT_RATE);
@@ -78,11 +93,16 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     const sourceNode = ctx.createBufferSource();
     sourceNode.buffer = buffer;
     sourceNode.connect(ctx.destination);
-    void ctx.resume();
-    sourceNode.start();
+    playing.add(sourceNode);
+    sourceNode.onended = () => { playing.delete(sourceNode); sourceNode.disconnect(); };
+    const start = Math.max(ctx.currentTime + 0.02, nextPlaybackTime);
+    nextPlaybackTime = start + buffer.duration;
+    void ctx.resume().catch(() => {});
+    sourceNode.start(start);
   };
 
   const stopMicrophone = () => {
+    if (processor) processor.onaudioprocess = null;
     processor?.disconnect();
     processor = null;
     source?.disconnect();
@@ -95,31 +115,41 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     if (closed) return;
     closed = true;
     stopMicrophone();
+    stopPlayback();
+    if (ownsContext && context) void context.close().catch(() => {});
     try { socket.close(1000, "client closed"); } catch { /* already closed */ }
     state?.("closed");
   };
 
   socket.addEventListener("message", (event) => {
-    if (typeof event.data !== "string") return;
+    if (closed || typeof event.data !== "string") return;
     let parsed: LiveEvent;
     try { parsed = JSON.parse(event.data) as LiveEvent; } catch { return; }
-    if (parsed.kind === "ready") { state?.("live"); return; }
-    if (parsed.kind === "audio") { play(parsed.data, parsed.mimeType); return; }
-    if (parsed.kind === "error") { state?.("error"); }
+    if (parsed.kind === "ready") { ready = true; state?.("live"); return; }
+    if (parsed.kind === "audio") {
+      try { play(parsed.data, parsed.mimeType); }
+      catch { options.onEvent({ kind: "error", message: "Audio playback failed." }); close(); state?.("error"); }
+      return;
+    }
+    if (parsed.kind === "interrupted") stopPlayback();
+    if (parsed.kind === "error") { close(); state?.("error"); }
     options.onEvent(parsed);
   });
-  socket.addEventListener("error", () => { if (!closed) state?.("error"); });
-  socket.addEventListener("close", () => { if (!closed) { closed = true; stopMicrophone(); state?.("closed"); } });
+  socket.addEventListener("error", () => { if (!closed) { close(); state?.("error"); } });
+  socket.addEventListener("close", close);
 
   const startMicrophone = async () => {
     const media = options.media ?? navigator.mediaDevices;
     const mic = await media.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (closed) { mic.getTracks().forEach((track) => track.stop()); return; }
     stream = mic;
-    const ctx = context ?? (context = new AudioContext({ sampleRate: LIVE_IN_RATE }));
+    const ctx = context ?? (context = new AudioContext());
+    await ctx.resume();
+    if (closed) return;
     source = ctx.createMediaStreamSource(mic);
     processor = ctx.createScriptProcessor(4096, 1, 1);
     processor.onaudioprocess = (event) => {
-      if (socket.readyState !== WebSocket.OPEN) return;
+      if (closed || !ready || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 128 * 1024) return;
       const samples = downsampleTo16k(event.inputBuffer.getChannelData(0), ctx.sampleRate);
       socket.send(pcm16ToBytes(samples));
     };
@@ -131,7 +161,7 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     socket.addEventListener("open", () => { state?.("connecting"); resolve(); }, { once: true });
     socket.addEventListener("error", () => reject(new Error("The live conversation could not start.")), { once: true });
   });
-  opened.then(() => startMicrophone()).catch(() => { state?.("error"); close(); });
+  opened.then(() => { if (!closed) return startMicrophone(); }).catch(() => { if (!closed) { close(); state?.("error"); } });
 
   return {
     close,

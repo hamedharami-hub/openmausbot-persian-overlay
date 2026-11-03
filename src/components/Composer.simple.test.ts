@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-// Simple mode's composer: one pill with a round + (attach, Work until done or Finish together, Teach a task), a chip for a
-// mode only while this conversation turns it on, and one round button in the bot's tone that calls, sends or stops.
-// Advanced keeps its row of buttons.
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -9,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bot, Group } from "@/state/store";
 import { restoreComposerDraft } from "@/lib/drafts";
 import { setCallMode } from "@/lib/call-mode";
-import { userBubbleTone } from "@/lib/user-bubble-tone";
 import { BOT_BUTTON, botButtonTone } from "@/lib/bot-button";
 
 const fixture = vi.hoisted(() => ({
@@ -121,8 +117,7 @@ describe("the Simple composer in a bot chat", () => {
     expect(container.querySelector('button[aria-label="Attach a file"]')).toBeNull();
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
     expect(container.querySelector("[data-approval-chip]")).toBeNull();
-    const tone = userBubbleTone("purple");
-    expect(fixture.call).toMatchObject({ bot: { id: "atlas" }, placement: "composer", fill: tone.background, ink: tone.ink });
+    expect(fixture.call).toBeNull();
     openPlus();
     expect([...menu()!.querySelectorAll("[data-menu-key]")].map((row) => row.getAttribute("data-menu-key"))).toEqual(["attach", "goal", "teach"]);
     expect([...menu()!.querySelectorAll("[data-menu-key]")].map((row) => row.textContent)).toEqual(["Attach files", "Work until done", "Teach a task"]);
@@ -150,10 +145,10 @@ describe("the Simple composer in a bot chat", () => {
     expect(menu()).toBeNull();
   });
 
-  it("keeps the plain placeholder while the bot works and says what Send does in the bot's terms", () => {
+  it("keeps the field blank while the bot works and says what Send does in the bot's terms", () => {
     restoreComposerDraft(`bot:${bot.id}:${bot.threadId}`, { text: "and this", attachments: [] });
     render({ bot: { ...bot, busy: true } });
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toBe("Message Atlas");
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
     const send = container.querySelector<HTMLButtonElement>('button[aria-label="Sends when Atlas is done"]')!;
     expect(send.getAttribute("title")).toBe("Sends when Atlas is done");
   });
@@ -244,11 +239,11 @@ describe("the Simple composer in a bot chat", () => {
 describe("the composer after Set me up", () => {
   it("asks for the job and shows a chip to stop it while the conversation waits, and neither once it does not", () => {
     render({ bot: { ...bot, tasks: [{ threadId: bot.threadId, title: "New thread", createdAt: 1, setupRequest: { at: 2 } }] } });
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toBe("Tell Atlas what you'd like help with");
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
     expect(container.querySelector("[data-setup-request]")?.textContent).toContain("Atlas is ready to be set up");
     expect(container.querySelector(`[aria-label="Stop setting up Atlas"]`)).not.toBeNull();
     render({ bot: { ...bot, tasks: [{ threadId: bot.threadId, title: "New thread", createdAt: 1 }] } });
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toBe("Message Atlas");
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
     expect(container.querySelector("[data-setup-request]")).toBeNull();
   });
 });
@@ -257,8 +252,8 @@ describe("the Simple composer in a group chat", () => {
   it("offers Finish together in the + menu and keeps its chip in view while it is on", () => {
     render({ group: room, members: [bot, peer] });
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toBe("Message Launch planning");
-    expect(fixture.groupCall).toMatchObject({ group: { id: "room" }, placement: "composer", fill: "var(--color-accent)", ink: "var(--color-accent-ink)" });
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
+    expect(fixture.groupCall).toBeNull();
     restoreComposerDraft(`group:${room.id}:${room.threadId}`, { text: "hello room", attachments: [] });
     render({ group: room, members: [bot, peer] });
     const send = sendButton()!;
@@ -272,28 +267,28 @@ describe("the Simple composer in a group chat", () => {
     click(item("goal"));
     const chip = container.querySelector("[data-goal-chip]");
     expect(chip?.getAttribute("aria-label")).toBe("Turn off Finish together");
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toContain("finish together");
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
     openPlus();
     expect(item("goal")!.querySelector(".lucide-check")).not.toBeNull();
     click(chip);
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
   });
 
-  it("keeps the room's @ hint only when the room answers to mentions", () => {
+  it("keeps the field blank when the room answers to mentions", () => {
     render({ group: { ...room, defaultResponder: { kind: "mentions" } }, members: [bot, peer] });
-    expect(container.querySelector("textarea")!.getAttribute("placeholder")).toBe("Message Launch planning (@ to bring a bot in)");
+    expect(container.querySelector("textarea")!.hasAttribute("placeholder")).toBe(false);
   });
 });
 
 describe("the Advanced composer", () => {
-  it("keeps the paperclip, the approval shield and the split call button, with no +, on Simple's floating surface", () => {
+  it("keeps the paperclip and approval shield without built-in calls on Simple's floating surface", () => {
     fixture.advanced = true;
     render({ bot });
     expect(plus()).toBeNull();
     expect(container.querySelector('[data-tour="composer"]')!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-2xl", "bg-composer", "ring-[0.5px]", "shadow-(--shadow-float)"]));
     expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
     expect(container.querySelector('[aria-haspopup="menu"][aria-label$="for Claude"]')).not.toBeNull();
-    expect(fixture.call).toMatchObject({ placement: "composer" });
+    expect(fixture.call).toBeNull();
     expect(fixture.call?.fill).toBeUndefined();
     expect(container.querySelector("[data-composer-backdrop]")!.className.split(" ")).toContain("top-1/2");
   });

@@ -43,11 +43,11 @@ export function GeminiLiveConversation({ threadId, className }: { threadId?: str
   }, [threadId]);
 
   const live = phase === "live" || phase === "connecting";
-  const button = "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium transition-colors";
+  const button = "flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium transition-colors";
   return (
-    <div className={cn("pointer-events-auto flex flex-col gap-1.5", className)}>
+    <div className={cn("pointer-events-auto relative flex flex-col gap-1.5", className)}>
       {live && (
-        <div className="mx-5 mb-1 flex flex-col gap-1 rounded-xl border bg-panel px-3 py-2 text-[13px] text-ink" dir="auto">
+        <div role="status" className="absolute bottom-full end-0 z-20 mb-3 flex max-h-40 w-64 max-w-[75vw] flex-col gap-1 overflow-y-auto rounded-xl bg-panel px-3 py-2 text-[13px] text-ink shadow-lg" dir="auto">
           {heard && <div className="text-ink-secondary">{heard}</div>}
           <div>{caption || t("composer.geminiLive.waiting")}</div>
         </div>

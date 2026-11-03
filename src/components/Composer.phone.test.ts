@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-// The phone composer: a round + beside one pill, in Simple and Advanced mode. The buttons Advanced shows in a row
-// (attach, approval level, where the bot works, Finish together) are entries of that +, and the call button is inverse.
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -27,6 +25,8 @@ vi.mock("@/state/store", async (importOriginal) => {
   }) };
 });
 vi.mock("@/lib/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/lib/use-gemini-configured", () => ({ useGeminiVoiceConfigured: () => true }));
+vi.mock("./GeminiLiveConversation", () => ({ GeminiLiveConversation: () => createElement("button", { "data-gemini-live": "" }, "Live") }));
 vi.mock("@/lib/use-owner-or-admin", () => ({ useOwnerOrAdmin: () => true }));
 vi.mock("@/lib/interface-mode", () => ({ useAdvancedMode: () => fixture.advanced, setAdvancedMode: vi.fn() }));
 vi.mock("./CallView", () => ({ CallButton: (props: Record<string, unknown>) => {
@@ -91,11 +91,28 @@ afterEach(() => {
 });
 
 describe("the phone composer", () => {
-  it("shows only the + and the pill in Simple mode, with an inverse voice button", () => {
+  it("keeps + inside the single pill without a separate ring or built-in call", () => {
     render({ bot });
     expect(plus()).not.toBeNull();
-    expect(fixture.call).toMatchObject({ placement: "composer", inverse: true });
-    expect(fixture.call?.fill).toBeUndefined();
+    expect(plus()?.closest("[data-composer-row]")).not.toBeNull();
+    expect(plus()?.closest('[data-tour="composer"]')?.className).toContain("rounded-[26px]");
+    expect(plus()?.closest('[data-tour="composer"]')?.className).toContain("[&_[data-composer-plus]]:ring-0");
+    expect(container.querySelector("textarea")?.hasAttribute("placeholder")).toBe(false);
+    expect(fixture.call).toBeNull();
+    expect(fixture.groupCall).toBeNull();
+    expect(container.querySelector("[data-gemini-live]")).not.toBeNull();
+  });
+
+  it("keeps attachment and send available inside the phone pill", () => {
+    const picker = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
+    restoreComposerDraft(`bot:${bot.id}:${bot.threadId}`, { text: "hello phone", attachments: [] });
+    render({ bot });
+    openPlus();
+    click(item("attach"));
+    expect(picker).toHaveBeenCalledOnce();
+    click(container.querySelector('button[aria-label="Send message"]'));
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "send", text: "hello phone" }));
+    expect(container.querySelector("textarea")!.value).toBe("");
   });
 
   it("moves Advanced mode's row of buttons into the +", () => {
@@ -104,11 +121,14 @@ describe("the phone composer", () => {
     expect(container.querySelector('button[aria-label="Attach a file"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Ask for approval for"]')).toBeNull();
     expect(container.querySelector('[data-testid="place-chip"]')).toBeNull();
-    expect(fixture.call).toMatchObject({ inverse: true });
+    expect(fixture.call).toBeNull();
+    expect(plus()?.closest("[data-composer-row]")).not.toBeNull();
     openPlus();
     const keys = [...menu()!.querySelectorAll("[data-menu-key]")].map((row) => row.getAttribute("data-menu-key"));
-    expect(keys).toEqual(expect.arrayContaining(["attach", "place", "approval", "call:turns", "call:live"]));
+    expect(keys).toEqual(expect.arrayContaining(["attach", "place", "approval"]));
     expect(item("place")?.textContent).toContain("Works on");
+    expect(item("call:turns")).toBeNull();
+    expect(item("call:live")).toBeNull();
   });
 
   it("keeps Advanced mode's buttons in a row on a wider screen", () => {
@@ -117,6 +137,6 @@ describe("the phone composer", () => {
     render({ bot });
     expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="place-chip"]')).not.toBeNull();
-    expect(fixture.call?.inverse).toBe(false);
+    expect(fixture.call).toBeNull();
   });
 });
