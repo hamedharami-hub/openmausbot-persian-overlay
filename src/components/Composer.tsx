@@ -29,7 +29,7 @@ import {
   type ComposerSendSnapshot,
   type FailedComposerSend,
 } from "@/lib/drafts";
-import { DEVS_CHOICE, MentionMenu, teammateChoices, type MentionChoice } from "./MentionMenu"; import { useTeammates } from "@/state/team-people"; import { hiddenFromSidebar, useViewerEmail } from "@/lib/default-bot";
+import { DEVS_CHOICE, MentionMenu, sortBotsPinnedFirst, teammateChoices, type MentionChoice } from "./MentionMenu"; import { useTeammates } from "@/state/team-people"; import { hiddenFromSidebar, useViewerEmail } from "@/lib/default-bot";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { MentionTextarea } from "./MentionTextarea";
 import { ComposerAttachments, pathForFile } from "./ComposerAttachments";
@@ -235,6 +235,7 @@ export function Composer({
   const [highlight, setHighlight] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [dismissedSlashAt, setDismissedSlashAt] = useState<number | null>(null);
+  const [plusCommandMenuOpen, setPlusCommandMenuOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const draftIdRef = useRef(draftId);
   draftIdRef.current = draftId;
@@ -310,11 +311,12 @@ export function Composer({
 
   const slash = composerSlashTrigger(text, caret);
   const locale = activeLocale();
-  const slashSkills = useSlashSkills(group ? undefined : bot?.id, threadId, Boolean(slash) && slash?.start !== dismissedSlashAt);
+  const slashActive = (Boolean(slash) && slash?.start !== dismissedSlashAt) || plusCommandMenuOpen;
+  const slashSkills = useSlashSkills(group ? undefined : bot?.id, threadId, slashActive);
   const canLearn = skillAuthoringEnabled(state.config) &&
     (group ? (members ?? []).some((member) => supportsAgents(state.instances, member)) : supportsAgents(state.instances, bot));
   const commandCandidates = useMemo(() => {
-    if (!slash || slash.start === dismissedSlashAt) return [];
+    if (!slashActive) return [];
     const available: ComposerSlashCommand[] = [];
     if (!group?.dm) available.push({
       kind: "command",
@@ -340,8 +342,9 @@ export function Composer({
       kind: "command", id, label: `/${id}`, description: t(`research.command.${id}`),
     });
     available.push(...skillSlashCommands(slashSkills));
-    return available.filter((command) => slashCommandMatches(command, slash.query));
-  }, [slash, dismissedSlashAt, group, bot, canLearn, state.instances, locale, slashSkills]);
+    const q = slash ? slash.query : "";
+    return available.filter((command) => slashCommandMatches(command, q));
+  }, [slashActive, slash, group, bot, canLearn, state.instances, locale, slashSkills]);
   const commandPickerOpen = commandCandidates.length > 0;
 
   const mention = mentionQueryAt(text, caret); const teammates = useTeammates(); const viewer = useViewerEmail();
@@ -350,11 +353,11 @@ export function Composer({
     const pool: MentionChoice[] = group
       ? [
           ...(!group.dm ? [{ id: "__everyone__", name: "everyone" }] : []),
-          ...(members ?? []).map((member) => ({ id: member.id, name: member.name, bot: member })),
+          ...sortBotsPinnedFirst(members ?? []).map((member) => ({ id: member.id, name: member.name, bot: member })),
         ]
-      : state.bots
-          .filter((member) => member.id !== bot?.id && !member.hidden && !hiddenFromSidebar(member, viewer))
-          .map((member) => ({ id: member.id, name: member.name, bot: member }));
+      : sortBotsPinnedFirst(
+          state.bots.filter((member) => member.id !== bot?.id && !member.hidden && !hiddenFromSidebar(member, viewer)),
+        ).map((member) => ({ id: member.id, name: member.name, bot: member }));
     return mentionChoicesForQuery([...pool, ...teammateChoices(teammates.people), DEVS_CHOICE], mention.query);
   }, [mention, dismissedAt, state.bots, bot?.id, group, members, teammates, viewer]);
   const mentionEveryoneCount = (members ?? []).filter((member) => !member.hidden).length;
@@ -401,20 +404,29 @@ export function Composer({
   };
 
   const pickCommand = (command: ComposerSlashCommand | undefined) => {
-    if (!slash || !command) return;
+    if (!command || (!slash && !plusCommandMenuOpen)) return;
+    setPlusCommandMenuOpen(false);
     const researchPick = command.kind === "command" ? researchCommand(command.id) : null;
     if (researchPick) { setResearch(researchPick); markDraftEdited(draftId); }
     else if (command.kind === "command" && command.id === "goal") setResearch(null);
     const replacement = command.kind === "skill" ? `${command.label} `
       : command.id === "learn" ? "/learn " : command.id === "setup" ? "/setup " : "";
-    const next = replaceComposerSlashTrigger(text, slash, replacement);
+    const trigger = slash ?? { query: "", start: 0, end: 0 };
+    const next = replaceComposerSlashTrigger(text, trigger, replacement);
     editText(next.text);
     setCaret(next.caret);
-    setDismissedSlashAt(slash.start);
+    if (slash) setDismissedSlashAt(slash.start);
     setChannelMode(command.kind === "command" && command.id === "goal" ? "goal" : "chat");
     requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+  const openSlashMenuFromPlus = () => {
+    setDismissedSlashAt(null);
+    setPlusCommandMenuOpen((prev) => !prev);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
     });
   };
   const teachTask = () => {
@@ -759,8 +771,18 @@ export function Composer({
             </button>
           </div>
         ))}
-        <SlashCommandMenu listRef={commandListRef} motion={commandMotion} commands={commandCandidates} highlight={highlight}
-          onPick={pickCommand} onHighlight={setHighlight} />
+        <SlashCommandMenu
+          listRef={commandListRef}
+          motion={commandMotion}
+          commands={commandCandidates}
+          highlight={highlight}
+          onPick={pickCommand}
+          onHighlight={setHighlight}
+          onClose={() => {
+            setPlusCommandMenuOpen(false);
+            if (slash) setDismissedSlashAt(slash.start);
+          }}
+        />
         <MentionMenu listRef={mentionListRef} motion={mentionMotion} choices={candidates} highlight={highlight}
           everyoneCount={mentionEveryoneCount} onPick={pickMention} onHighlight={setHighlight} />
         {approval && (
@@ -823,6 +845,7 @@ export function Composer({
           <div className="flex shrink-0 items-center [&_[data-composer-plus]]:size-8 [&_[data-composer-plus]]:bg-transparent [&_[data-composer-plus]]:ring-0">
             <PhonePlus
               onAttach={() => fileInput.current?.click()}
+              onHoldCommands={openSlashMenuFromPlus}
               goal={goal}
               teach={!advanced && canLearn ? teachTask : undefined}
               approval={approvalChoice && modeBot && { name: modeBot.name, choice: approvalChoice }}
@@ -848,7 +871,7 @@ export function Composer({
           />
           {!locked && !singleRow && (
             <div className={cn("flex items-center gap-1", simpleDock ? "shrink-0" : "flex-wrap")}>
-              {simpleDock && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} goal={goal} teach={canLearn ? teachTask : undefined} />}
+              {simpleDock && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} onHoldCommands={openSlashMenuFromPlus} goal={goal} teach={canLearn ? teachTask : undefined} />}
               {advanced && <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
@@ -887,6 +910,7 @@ export function Composer({
             setCaret(e.target.selectionStart ?? e.target.value.length);
             setDismissedAt(null);
             setDismissedSlashAt(null);
+            setPlusCommandMenuOpen(false);
           }}
           onPaste={handlePaste}
           onKeyUp={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
@@ -910,6 +934,7 @@ export function Composer({
               }
               if (e.key === "Escape") {
                 e.preventDefault();
+                setPlusCommandMenuOpen(false);
                 setDismissedSlashAt(slash?.start ?? null);
                 return;
               }

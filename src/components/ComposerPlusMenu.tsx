@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { AudioLines, Check, GraduationCap, ListChecks, Paperclip, Phone, Plus, Target, X } from "lucide-react";
+import { AudioLines, Check, GraduationCap, ListChecks, Paperclip, Phone, Plus, Slash, Target, X } from "lucide-react";
 import { approvalModeFor } from "../../shared/approval-mode";
 import {
   approvalModeOptions,
@@ -153,10 +153,12 @@ export function ApprovalChip({ choice, quiet = false }: { choice: ApprovalChoice
  * holds what its narrow composer has no room for: the thread's approval level, the call mode and where the bot works,
  * each running the handler its Advanced button runs. With attaching the only choice, the + opens the file picker.
  */
-export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, extraItems = [], circle = false }: {
+export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, onHoldCommands, extraItems = [], circle = false }: {
   onAttach: () => void;
   /** Starts a /learn draft in the field, where the composer offers /learn. */
   teach?: () => void;
+  /** Opens the categorized / slash commands menu (triggered by holding + or picking from + menu). */
+  onHoldCommands?: () => void;
   /** Entries a phone composer moves here from its hidden buttons, such as where the bot works. */
   extraItems?: SidebarMenuItem[];
   /** The phone dock: a round button of its own beside the field, not a small chip inside it. */
@@ -166,6 +168,42 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   /** The bot whose call button the call mode starts, as that button's own mode menu did. */
   callBotId?: string;
 }) {
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTriggeredRef = useRef(false);
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+  useEffect(() => () => clearHoldTimer(), []);
+
+  const handlePointerDown = () => {
+    if (!onHoldCommands) return;
+    holdTriggeredRef.current = false;
+    clearHoldTimer();
+    holdTimerRef.current = setTimeout(() => {
+      holdTriggeredRef.current = true;
+      onHoldCommands();
+    }, 360);
+  };
+  const handlePointerUpOrCancel = () => {
+    clearHoldTimer();
+  };
+  const handleClickCapture = (event: React.MouseEvent) => {
+    if (holdTriggeredRef.current) {
+      holdTriggeredRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  const handleContextMenu = (event: React.MouseEvent) => {
+    if (!onHoldCommands) return;
+    event.preventDefault();
+    clearHoldTimer();
+    holdTriggeredRef.current = true;
+    onHoldCommands();
+  };
   const { capabilities, ready } = useDesktopCapabilities();
   const storedMode = useCallMode();
   const onCall = useOnCall();
@@ -180,6 +218,12 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   const simple = !useAdvancedMode();
   const items: SidebarMenuItem[] = [
     { key: "attach", label: t("composer.attachFiles"), icon: <Paperclip size={16} />, onSelect: onAttach },
+    ...(onHoldCommands ? [{
+      key: "commands",
+      label: "منوی دستورات بات (/)",
+      icon: <Slash size={16} />,
+      onSelect: onHoldCommands,
+    } satisfies SidebarMenuItem] : []),
     ...(goal ? [{
       key: "goal",
       label: t(goal.solo ? "composer.goal.soloAria" : "composer.goal.aria"),
@@ -225,20 +269,56 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   );
   if (!circle && items.length === 1) {
     return (
-      <button type="button" onClick={onAttach} aria-label={t("composer.attachFiles")} title={t("composer.attachFiles")} className="flex shrink-0 rounded-full">
+      <button
+        type="button"
+        onClick={onAttach}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
+        onPointerLeave={handlePointerUpOrCancel}
+        onClickCapture={handleClickCapture}
+        onContextMenu={handleContextMenu}
+        aria-label={t("composer.attachFiles")}
+        title={t("composer.attachFiles")}
+        className="flex shrink-0 rounded-full"
+      >
         {trigger(false)}
       </button>
     );
   }
-  if (!circle) return <ComposerMenu items={items} renderTrigger={trigger} />;
+  if (!circle) {
+    return (
+      <div
+        className="contents"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
+        onPointerLeave={handlePointerUpOrCancel}
+        onClickCapture={handleClickCapture}
+        onContextMenu={handleContextMenu}
+      >
+        <ComposerMenu items={items} renderTrigger={trigger} />
+      </div>
+    );
+  }
   return (
-    <SidebarPopoverMenu
-      items={items}
-      ariaLabel={t("common.add")}
-      triggerTitle={t("common.add")}
-      triggerClassName="flex shrink-0 rounded-full"
-      renderTrigger={({ open }) => trigger(open)}
-    />
+    <div
+      className="contents"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUpOrCancel}
+      onPointerCancel={handlePointerUpOrCancel}
+      onPointerLeave={handlePointerUpOrCancel}
+      onClickCapture={handleClickCapture}
+      onContextMenu={handleContextMenu}
+    >
+      <SidebarPopoverMenu
+        items={items}
+        ariaLabel={t("common.add")}
+        triggerTitle={t("common.add")}
+        triggerClassName="flex shrink-0 rounded-full"
+        renderTrigger={({ open }) => trigger(open)}
+      />
+    </div>
   );
 }
 
