@@ -144,9 +144,13 @@ export interface Message extends Pick<import("../../shared/wire").WireMessage, "
   channelMode?: "chat" | "goal";
   tool?: { name: string; ok?: boolean; spoken?: string; setup?: boolean; claudeUpdate?: boolean; place?: PlaceRow; limitResetsAt?: number; summary?: string; input?: string; output?: string ; itemId?: string; outputPath?: string; fullResult?: boolean; rescue?: import("../../shared/first-reply-rescue").FirstReplyRescue; step?: import("../../shared/turn-progress").LiveStep; whose?: { person: string; app: string } };
   steered?: boolean;
+  webhookPost?: boolean;
   via?: "api" | "call";
   callId?: string;
   requestMessageId?: string;
+  requestPending?: boolean;
+  requestCancelled?: boolean;
+  turnSucceeded?: boolean;
   turnId?: string;
   turnTerminal?: boolean;
   turnCompletedAt?: number;

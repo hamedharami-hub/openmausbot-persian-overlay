@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
+import { researchMission } from "../src/lib/research-mission.ts";
 
 it("injects research only into the requested turn and retains original user text", async () => {
   const session = await launchVerificationServer();
@@ -29,6 +30,12 @@ it("injects research only into the requested turn and retains original user text
     expect(accepted.status).toBe(202);
     expect(accepted.body.message).toMatchObject({ text: send.text, research });
     expect((await control(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "20"])).status).toBe("settled");
+    const page = await fetch(`${session.info.url}/api/threads/${bot.threadId}/messages?limit=100`).then((response) => response.json()) as any;
+    const persistedRequest = page.messages.find((message: any) => message.id === accepted.body.message.id);
+    expect(persistedRequest).toBeTruthy();
+    const receipt = researchMission(persistedRequest, page.messages);
+    expect(receipt.status).toBe("responded");
+    evidence.push({ researchReceipt: receipt });
     const dumpPath = join(session.info.dataDir, "fake-claude-dump.json");
     const dump = JSON.parse(readFileSync(dumpPath, "utf8"));
     expect(JSON.stringify(dump.prompt)).toContain("<research-request>");

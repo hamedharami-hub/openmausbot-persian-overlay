@@ -67,6 +67,25 @@ const bot: Bot = {
     modelSelection: { instanceId: "test", model: "thread-model" }, approvalMode: "ask" }],
 };
 
+describe("research request receipts", () => {
+  it("renders request-linked evidence even with tool chips hidden and marks partial history", () => {
+    fixture.showToolCalls = false;
+    fixture.advanced = true;
+    const request = { id: "research", role: "user" as const, kind: "text" as const, text: "Check current evidence", at: 1, parentId: null, requestPending: false,
+      research: { mode: "verify" as const, depth: "deep" as const, length: "short" as const } };
+    const tool = { id: "tool", role: "bot" as const, kind: "activity" as const, at: 2, parentId: request.id, requestMessageId: request.id,
+      tool: { name: "Fetch fixture", ok: true, output: "https://example.org/source" } };
+    const answer = { id: "answer", role: "bot" as const, kind: "text" as const, at: 3, parentId: tool.id, requestMessageId: request.id,
+      turnSucceeded: true, turnTerminal: true, text: "Evidence summary" };
+    const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, messages: [request, tool, answer], activeLeafId: answer.id, hasMore: true } }));
+    expect(markup).toContain("Research request receipt");
+    expect(markup).toContain("Response recorded");
+    expect(markup).toContain("https://example.org/source");
+    expect(markup).toContain("Older history is not fully loaded");
+    expect(markup).not.toContain("data-tool-detail");
+  });
+});
+
 describe("the header's right side", () => {
   const header = (of: Bot = bot) => {
     fixture.menus = [];
