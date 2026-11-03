@@ -10,6 +10,7 @@ import { BotAvatar } from "./Avatar";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { MENU_GUTTER, MENU_ICON, MENU_LABEL, MENU_LINE, MENU_NOTE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING, SIMPLE_MENU_META, SIMPLE_MENU_ROW } from "./menu-recipe";
 import { effortLabel } from "./ModelPicker";
+import { ModelStar } from "./ModelStar";
 
 export type SimpleThinking =
   | { levels: readonly EffortLevel[]; current?: EffortLevel; onPick: (level: EffortLevel) => void; onReset: () => void }
@@ -52,6 +53,7 @@ function RowLines({ label, children }: { label: ReactNode; children?: ReactNode 
 function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: MenuModelRow; onPick: SimpleMenuActions["onPick"] }) {
   const { option } = row;
   return (
+    <div className="flex items-center [&>button:first-child]:flex-1 [&>button:first-child]:min-w-0">
     <button
       type="button"
       data-menu-row
@@ -68,6 +70,8 @@ function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: Men
       </RowLines>
       {row.current && <Check size={14} className="shrink-0 text-accent" aria-hidden="true" />}
     </button>
+    <ModelStar instanceId={instance.instanceId} modelId={option.id} label={option.label} />
+    </div>
   );
 }
 

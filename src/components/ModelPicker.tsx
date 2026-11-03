@@ -35,6 +35,8 @@ import { usePickerPane } from "@/lib/model-picker-pane";
 import { threadsOnOwnModel } from "../../shared/thread-model";
 import { ThreadModelsLine } from "./ThreadModelsLine";
 import { Select } from "./Select";
+import { ModelStar } from "./ModelStar";
+import { modelStarKey, starredModelsFirst, useModelStars } from "@/lib/model-stars";
 
 const COMPACT_MODEL_COUNT = 5;
 
@@ -234,6 +236,7 @@ export function ModelPicker({
   size?: "sm" | "md";
 }) {
   const { state, dispatch: storeDispatch, refreshInstances, refreshModels: refreshInstanceModels } = useStore();
+  const stars = useModelStars();
   const [open, setOpen] = useState(false);
   const { bot, dispatch } = useAiSwitch({ bot: shown, threadId, contained, dispatch: storeDispatch, setOpen: (next) => (next ? openMenu() : setOpen(false)) });
   const motion = useMenuMotion(open && !bot.busy);
@@ -509,17 +512,19 @@ export function ModelPicker({
     close(true);
   } : undefined;
 
-  const official = railInstance ? modelChoices(railInstance, railInstance.models.options.filter((option) => !option.custom)) : [];
-  const custom = railInstance?.models.options.filter((option) => option.custom) ?? [];
+  const official = railInstance ? starredModelsFirst(modelChoices(railInstance, railInstance.models.options.filter((option) => !option.custom)), railInstance.instanceId, stars) : [];
+  const custom = starredModelsFirst(railInstance?.models.options.filter((option) => option.custom) ?? [], railInstance?.instanceId ?? "", stars);
   const currentModel = selection.instanceId === railInstance?.instanceId
     ? official.find((option) => choiceIsSelected(option, selection))?.id : undefined;
   const filteredOfficial = filterCustomModels(official, query);
+  const starredOfficial = official.filter((option) => stars.has(modelStarKey(railInstance?.instanceId ?? "", option.id)));
   const compactOfficial = railInstance
-    ? suggestedModels(official, railInstance.models.default, currentModel, COMPACT_MODEL_COUNT)
+    ? [...starredOfficial, ...suggestedModels(official.filter((option) => !starredOfficial.includes(option)), railInstance.models.default, currentModel, Math.max(0, COMPACT_MODEL_COUNT - starredOfficial.length))]
     : [];
   const shownOfficial = query ? filteredOfficial : showAll ? official : compactOfficial;
   const filteredCustom = filterCustomModels(custom, query);
-  const { pinned, rest } = partitionCustomModels(filteredCustom);
+  const starredCustom = filteredCustom.filter((option) => stars.has(modelStarKey(railInstance?.instanceId ?? "", option.id)));
+  const { pinned, rest } = partitionCustomModels(filteredCustom.filter((option) => !starredCustom.includes(option)));
   const blocked = railInstance
     ? pane === "custom"
       ? needsCli(railInstance)
@@ -555,14 +560,16 @@ export function ModelPicker({
   const botModelSelection = follows !== undefined && profile.modelSelection.instanceId === railInstance?.instanceId
     ? profile.modelSelection : undefined;
   const renderRow = (option: ModelChoice) => (
+    <div key={option.id} className="flex items-center [&>button:first-child]:flex-1 [&>button:first-child]:min-w-0">
     <ModelRow
-      key={option.id}
       option={option}
       current={selection.instanceId === railInstance?.instanceId && choiceIsSelected(option, selection)}
       defaultId={railInstance?.models.default ?? ""}
       botModel={botModelSelection ? choiceIsSelected(option, botModelSelection) : false}
       onPick={() => railInstance && pick(railInstance, option.nativeModel ?? option.id, option.variant)}
     />
+    {railInstance && <ModelStar instanceId={railInstance.instanceId} modelId={option.id} label={option.label} />}
+    </div>
   );
 
   const onMenuKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -689,6 +696,7 @@ export function ModelPicker({
     probing,
     loading: loadingInstances,
     refreshing: refreshingId,
+    stars,
   }) : null;
 
   const fullPane = (
@@ -872,6 +880,7 @@ export function ModelPicker({
                     ) : (
                       <>
                         {lookingForLocal && custom.length > 0 && lookingForLocalStatus}
+                        {starredCustom.map(renderRow)}
                         {pinned.length > 0 && <div className={MENU_LABEL}>{t("model.loadedNow")}</div>}
                         {pinned.map(renderRow)}
                         {pinned.length > 0 && rest.length > 0 && <div role="separator" className={MENU_SEPARATOR} />}

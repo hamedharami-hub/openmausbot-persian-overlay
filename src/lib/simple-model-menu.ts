@@ -5,6 +5,7 @@ import { filterCustomModels, partitionCustomModels, suggestedModels } from "./cu
 import { isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail } from "./engine-rail";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
 import { choiceIsSelected, modelChoices, type ModelChoice } from "./model-choices";
+import { modelStarKey, starredModelsFirst } from "./model-stars";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -74,6 +75,7 @@ export interface SimpleMenuInput {
   probing: ReadonlySet<string>;
   loading: boolean;
   refreshing?: string | null;
+  stars?: ReadonlySet<string>;
 }
 
 export function providerName(instance: InstanceInfo): string {
@@ -150,7 +152,9 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   function groupBody(instance: InstanceInfo, provider: string): MenuGroupBody | null {
     if (instance.policy) return query ? null : { kind: "policy", organization: instance.policy.organizationName };
     if (needsCli(instance)) return query ? null : { kind: "setUp" };
-    const { signedOut, own, all } = models.get(instance.instanceId)!;
+    const { signedOut, own, all: unsorted } = models.get(instance.instanceId)!;
+    const stars = input.stars ?? new Set<string>();
+    const all = starredModelsFirst(unsorted, instance.instanceId, stars);
     if (all.length === 0) return query ? null : signedOut ? { kind: "signIn" } : { kind: "empty", loading: input.refreshing === instance.instanceId };
     const currentSelection = instance.instanceId === selection.instanceId ? selection : undefined;
     const repeated = repeatedModelLabels(all);
@@ -171,8 +175,9 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
     }
     const others = all.filter((option) => (!currentSelection || !choiceIsSelected(option, currentSelection))
       && (!botSelection || !choiceIsSelected(option, botSelection)));
-    const suggested = suggestedModels(others, instance.models.default, undefined,
-      currentSelection === undefined ? GROUP_SUGGESTIONS : CURRENT_GROUP_SUGGESTIONS);
+    const starred = others.filter((option) => stars.has(modelStarKey(instance.instanceId, option.id)));
+    const suggested = [...starred, ...suggestedModels(others.filter((option) => !starred.includes(option)), instance.models.default, undefined,
+      Math.max(0, (currentSelection === undefined ? GROUP_SUGGESTIONS : CURRENT_GROUP_SUGGESTIONS) - starred.length))];
     const rest = others.filter((option) => !suggested.includes(option));
     const open = expanded.has(instance.instanceId) || rest.length === 1;
     const rows = (open ? [...suggested, ...rest] : suggested).map(row);
