@@ -8,6 +8,15 @@ export const GEMINI_TTS_FALLBACK_MODELS = [
   "gemini-3.1-flash-tts-preview",
   "gemini-2.5-flash-preview-tts",
   "gemini-3.8-flash-tts",
+  "gemini-2.5-pro-preview-tts",
+] as const;
+export const GEMINI_TTS_QUALITY_MODELS = [
+  { id: "auto", label: "خودکار هوشمند (چرخش بین مدل‌های رایگان و پایدار)" },
+  { id: "gemini-3.8-flash-lite-tts", label: "سریع و اقتصادی · Flash 3.8 Lite (بیشترین سهمیه رایگان)" },
+  { id: "gemini-3.1-flash-tts-preview", label: "استاندارد · Flash 3.1 TTS (کیفیت متعادل + سهمیه رایگان)" },
+  { id: "gemini-2.5-flash-preview-tts", label: "کلاسیک · Flash 2.5 TTS (سهمیه رایگان مجزا)" },
+  { id: "gemini-3.8-flash-tts", label: "کیفیت بالا · Flash 3.8 TTS (صدای طبیعی‌تر)" },
+  { id: "gemini-2.5-pro-preview-tts", label: "کیفیت استودیویی · Pro 2.5 TTS (بالاترین کیفیت، سهمیه محدود)" },
 ] as const;
 export const GEMINI_STT_MODEL = "gemini-3.6-flash";
 export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
@@ -71,7 +80,7 @@ export function pcmToWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
   return Buffer.concat([header, pcm]);
 }
 
-export async function synthesizeGemini(text: string, voice: string, key: string, fetcher = fetch): Promise<Audio> {
+export async function synthesizeGemini(text: string, voice: string, key: string, fetcher = fetch, preferredModel?: string): Promise<Audio> {
   if (!text.trim() || text.length > MAX_GEMINI_TTS_CHARS) {
     throw new Error(`Voice text must contain 1–${MAX_GEMINI_TTS_CHARS} characters.`);
   }
@@ -84,12 +93,24 @@ export async function synthesizeGemini(text: string, voice: string, key: string,
     },
   };
   const now = Date.now();
+  const explicitModel = preferredModel && preferredModel !== "auto" && GEMINI_TTS_FALLBACK_MODELS.includes(preferredModel as (typeof GEMINI_TTS_FALLBACK_MODELS)[number])
+    ? preferredModel
+    : undefined;
+  const baseOrder = explicitModel
+    ? [explicitModel, ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => m !== explicitModel)]
+    : [...GEMINI_TTS_FALLBACK_MODELS];
   const candidates = fetcher === fetch
-    ? [
-        ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => (modelCooldownUntil.get(m) ?? 0) <= now),
-        ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => (modelCooldownUntil.get(m) ?? 0) > now),
-      ]
-    : [GEMINI_TTS_MODEL, ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => m !== GEMINI_TTS_MODEL)];
+    ? explicitModel
+      ? [
+          explicitModel,
+          ...baseOrder.filter((m) => m !== explicitModel && (modelCooldownUntil.get(m) ?? 0) <= now),
+          ...baseOrder.filter((m) => m !== explicitModel && (modelCooldownUntil.get(m) ?? 0) > now),
+        ]
+      : [
+          ...baseOrder.filter((m) => (modelCooldownUntil.get(m) ?? 0) <= now),
+          ...baseOrder.filter((m) => (modelCooldownUntil.get(m) ?? 0) > now),
+        ]
+    : [explicitModel ?? GEMINI_TTS_MODEL, ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => m !== (explicitModel ?? GEMINI_TTS_MODEL))];
 
   let parts: Array<{ text?: string; thought?: boolean; inlineData?: { data: string; mimeType: string } }> | undefined;
   let lastError: unknown;

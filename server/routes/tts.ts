@@ -22,10 +22,11 @@ function ttsCacheDir(): string {
   return dir;
 }
 
-function ttsCacheKey(cfg: AppConfig, text: string, voiceId?: string): string {
+function ttsCacheKey(cfg: AppConfig, text: string, voiceId?: string, modelOverride?: string): string {
   const provider = tts.voiceProvider(cfg);
   const voice = voiceId || cfg.tts?.voice || (provider === "gemini" ? "Kore" : "default");
-  return createHash("sha256").update(`${provider}:${voice}:${text}`).digest("hex");
+  const model = provider === "gemini" ? (modelOverride || cfg.tts?.model || "auto") : "";
+  return createHash("sha256").update(`${provider}:${voice}:${model}:${text}`).digest("hex");
 }
 
 function readCachedTts(key: string): { mime: string; bytes: Uint8Array } | null {
@@ -131,10 +132,11 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       if (text.length > maxChars) return json(res, 413, { error: `voice utterances are limited to ${maxChars} characters` });
       try {
         const voiceId = typeof body.voiceId === "string" ? body.voiceId : undefined;
-        const cacheKey = ttsCacheKey(cfg, text, voiceId);
+        const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : undefined;
+        const cacheKey = ttsCacheKey(cfg, text, voiceId, model);
         let audio = readCachedTts(cacheKey);
         if (!audio) {
-          audio = await tts.speak(cfg, text, voiceId);
+          audio = await tts.speak(cfg, text, voiceId, undefined, model);
           writeCachedTts(cacheKey, audio);
         }
         res.writeHead(200, {

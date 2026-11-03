@@ -21,12 +21,23 @@ export interface PlaybackDetails {
   blockIndex: number;
   totalBlocks: number;
   canDownload: boolean;
+  ttsModel: string;
 }
+
+export const GEMINI_TTS_QUALITY_OPTIONS = [
+  { id: "auto", label: "خودکار هوشمند (سهمیه رایگان + چرخش)", shortLabel: "خودکار" },
+  { id: "gemini-3.8-flash-lite-tts", label: "اقتصادی · Flash 3.8 Lite (بیشترین سهمیه رایگان)", shortLabel: "Lite رایگان" },
+  { id: "gemini-3.1-flash-tts-preview", label: "استاندارد · Flash 3.1 TTS (کیفیت متعادل + رایگان)", shortLabel: "3.1 استاندارد" },
+  { id: "gemini-2.5-flash-preview-tts", label: "کلاسیک · Flash 2.5 TTS (سهمیه رایگان مجزا)", shortLabel: "2.5 کلاسیک" },
+  { id: "gemini-3.8-flash-tts", label: "کیفیت بالا · Flash 3.8 TTS (صدای طبیعی‌تر)", shortLabel: "3.8 کیفیت بالا" },
+  { id: "gemini-2.5-pro-preview-tts", label: "استودیویی · Pro 2.5 TTS (بالاترین کیفیت، سهمیه محدود)", shortLabel: "Pro استودیویی" },
+] as const;
 
 interface SpeakOptions {
   voiceId?: string;
   botId?: string;
   messageId?: string;
+  model?: string;
 }
 
 /** One spoken reply, fed block by block: blocks come from the committed
@@ -95,6 +106,14 @@ export async function mergeWavOrAudioBlobs(blobs: Blob[]): Promise<Blob> {
   return new Blob(blobs, { type: blobs[0]!.type || "audio/mpeg" });
 }
 
+function readSavedTtsModel(): string {
+  try {
+    return typeof localStorage !== "undefined" ? (localStorage.getItem("omb.geminiTtsModel") || "auto") : "auto";
+  } catch {
+    return "auto";
+  }
+}
+
 const DEFAULT_PLAYBACK: PlaybackDetails = {
   paused: false,
   rate: 1,
@@ -103,6 +122,7 @@ const DEFAULT_PLAYBACK: PlaybackDetails = {
   blockIndex: 0,
   totalBlocks: 0,
   canDownload: false,
+  ttsModel: readSavedTtsModel(),
 };
 
 export class Speaker {
@@ -112,9 +132,11 @@ export class Speaker {
   private playbackWatchers = new Set<(p: PlaybackDetails) => void>();
   private blobCache = new Map<string, { blob: Blob; ts: number }>();
   private ratePref = 1;
+  private modelPref = readSavedTtsModel();
   private activeBlobs: Blob[] = [];
   private activeUtterances: string[] = [];
   private activeVoiceId: string | undefined = undefined;
+  private activeModel: string | undefined = undefined;
   private navRequest: { targetBlock: number; offsetSec?: number } | null = null;
   private activeBlockControl: { currentIndex: () => number; total: () => number } | null = null;
   private token = 0;
@@ -216,6 +238,15 @@ export class Speaker {
     this.setPlayback({ rate: clamped });
   }
 
+  setTtsModel(model: string): void {
+    const next = model.trim() || "auto";
+    this.modelPref = next;
+    try {
+      if (typeof localStorage !== "undefined") localStorage.setItem("omb.geminiTtsModel", next);
+    } catch { /* ignore */ }
+    this.setPlayback({ ttsModel: next });
+  }
+
   seek(seconds: number): void {
     if (!this.audio) return;
     const dur = Number.isFinite(this.audio.duration) && this.audio.duration > 0 ? this.audio.duration : 0;
@@ -263,7 +294,7 @@ export class Speaker {
       }
       const utterance = this.activeUtterances[i];
       if (!utterance) continue;
-      const cacheKey = `${this.activeVoiceId ?? ""}:${utterance}`;
+      const cacheKey = `${this.activeVoiceId ?? ""}:${this.activeModel ?? ""}:${utterance}`;
       const cached = this.getCachedBlob(cacheKey);
       if (cached) {
         this.activeBlobs[i] = cached;
@@ -271,7 +302,7 @@ export class Speaker {
         continue;
       }
       try {
-        const fetched = await this.render(utterance, this.activeVoiceId, new AbortController().signal);
+        const fetched = await this.render(utterance, this.activeVoiceId, new AbortController().signal, this.activeModel);
         this.setCachedBlob(cacheKey, fetched);
         this.activeBlobs[i] = fetched;
         blobs.push(fetched);
@@ -304,6 +335,7 @@ export class Speaker {
     this.activeBlobs = [];
     this.activeUtterances = [];
     this.activeVoiceId = undefined;
+    this.activeModel = undefined;
     const external = this.externalClaim;
     this.externalClaim = null;
     external?.pause();
@@ -317,7 +349,7 @@ export class Speaker {
     if (this.settlePlayback) this.settlePlayback(false);
     else this.teardownAudio();
     if (this.snapshot.status !== "idle" || this.snapshot.error) this.set(IDLE);
-    this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref });
+    this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref, ttsModel: this.modelPref });
   }
 
   claimExternalVoice(pause: () => void): () => void {
@@ -429,13 +461,14 @@ export class Speaker {
     };
     const render = (utterance: string, block: number): Promise<Rendered> => {
       recordBlockTiming(opts.messageId, block, "renderStart");
-      const cacheKey = `${opts.voiceId ?? ""}:${utterance}`;
+      const chosenModel = opts.model || this.modelPref;
+      const cacheKey = `${opts.voiceId ?? ""}:${chosenModel}:${utterance}`;
       const cached = this.getCachedBlob(cacheKey);
       if (cached) {
         recordBlockTiming(opts.messageId, block, "renderDone");
         return Promise.resolve({ blob: cached });
       }
-      return this.render(utterance, opts.voiceId, controller.signal).then(
+      return this.render(utterance, opts.voiceId, controller.signal, chosenModel).then(
         (blob) => {
           this.setCachedBlob(cacheKey, blob);
           recordBlockTiming(opts.messageId, block, "renderDone");
@@ -452,6 +485,7 @@ export class Speaker {
       this.activeBlobs = [];
       this.activeUtterances = pending;
       this.activeVoiceId = opts.voiceId;
+      this.activeModel = opts.model || this.modelPref;
       this.activeBlockControl = {
         currentIndex: () => Math.max(0, index - 1),
         total: () => pending.length,
@@ -524,7 +558,7 @@ export class Speaker {
       }
       if (playedAll && live() && !finished) {
         this.set(IDLE);
-        this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref });
+        this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref, ttsModel: this.modelPref });
       }
       if (this.request === controller) this.request = null;
     };
@@ -643,11 +677,12 @@ export class Speaker {
     return body.utterances ?? [];
   }
 
-  private async render(text: string, voiceId: string | undefined, signal: AbortSignal): Promise<Blob> {
+  private async render(text: string, voiceId: string | undefined, signal: AbortSignal, model?: string): Promise<Blob> {
+    const effectiveModel = model && model !== "auto" ? model : undefined;
     const res = await fetch("/api/tts/speak", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, voiceId }),
+      body: JSON.stringify({ text, voiceId, ...(effectiveModel ? { model: effectiveModel } : {}) }),
       signal,
     });
     if (!res.ok) {

@@ -75,7 +75,7 @@ export function describeVoice(cfg: AppConfig) {
     voice: cfg.tts?.voice || (provider === "gemini" ? "Kore" : ""),
     provider,
     baseUrl: provider === "chatterbox" ? (cfg.tts?.baseUrl ?? "") : "",
-    model: provider === "chatterbox" ? (cfg.tts?.model ?? "") : "",
+    model: provider === "chatterbox" || provider === "gemini" ? (cfg.tts?.model ?? "") : "",
     ...(provider === "fish" ? { fishModel: cfg.tts?.fishModel ?? fish.DEFAULT_FISH_MODEL } : {}),
     ...(included ? { included: true as const } : {}),
   };
@@ -113,12 +113,12 @@ export async function addSharedVoice(cfg: AppConfig, publicOwnerId: string, voic
   return elevenlabs.addSharedVoice(credential.token, credential.api, publicOwnerId, voiceId, name);
 }
 
-export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner) {
+export function speak(cfg: AppConfig, text: string, voiceId?: string, run?: systemVoices.Runner, modelOverride?: string) {
   const provider = voiceProvider(cfg);
   if (provider === "gemini") {
     const key = geminiVoiceKey(cfg);
     if (!key) throw new NoVoiceConfigured("key", "Configure haramipourhamedgemini to use Gemini voice.");
-    return synthesizeGemini(text, voiceId || cfg.tts?.voice || "Kore", key);
+    return synthesizeGemini(text, voiceId || cfg.tts?.voice || "Kore", key, undefined, modelOverride || cfg.tts?.model);
   }
   if (provider === "xai") {
     const key = cfg.xai?.key;

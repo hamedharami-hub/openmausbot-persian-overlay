@@ -4,7 +4,7 @@ import { Check, Loader2, Volume2 } from "lucide-react";
 
 import { api, useStore, type Bot, type ConfigStatus } from "@/state/store";
 import { useDesktopCapabilities } from "@/components/DesktopCapabilities";
-import { speaker } from "@/lib/tts";
+import { GEMINI_TTS_QUALITY_OPTIONS, speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import {
   listLocalSystemVoices,
@@ -255,6 +255,15 @@ export function VoiceSettings({
       .finally(() => setSavingFishModel(false));
   };
 
+  const saveGeminiTtsModel = (next: string) => {
+    speaker.setTtsModel(next);
+    setModel(next);
+    setError(null);
+    api("/api/config", { method: "PUT", body: JSON.stringify({ tts: { model: next === "auto" ? "" : next } }) })
+      .then((status: ConfigStatus) => dispatch({ type: "configStatus", config: status }))
+      .catch((e: Error) => setError(e.message));
+  };
+
   if (!tts) return null;
 
   const selectedVoice = usesLocalSystem ? deviceVoice : (bot.voice ?? "");
@@ -343,9 +352,32 @@ export function VoiceSettings({
       )}
 
       {provider === "gemini" && (
-        <div className="mt-3 text-[13px] text-ink-secondary" dir="auto">
-          Gemini · haramipourhamedgemini — فارسی و English به‌صورت خودکار خوانده می‌شوند.
-          Audio/text is sent to Google; API quota or charges may apply.
+        <div className="mt-3 space-y-3" dir="auto">
+          <div className="text-[13px] text-ink-secondary">
+            Gemini · haramipourhamedgemini — فارسی و English به‌صورت خودکار خوانده می‌شوند.
+            Audio/text is sent to Google; API quota or charges may apply.
+          </div>
+          {!workspaceConfigurationLocked && (
+            <div>
+              <div className="mb-1.5 text-[13px] text-ink-secondary">کیفیت و مدل خواندن متن (سهمیه رایگان / کیفیت گوگل)</div>
+              <Select
+                value={tts.model || speaker.playbackState.ttsModel || "auto"}
+                onChange={(e) => saveGeminiTtsModel(e.target.value)}
+                aria-label="Gemini TTS quality model"
+                data-gemini-tts-quality
+                className="w-full"
+              >
+                {GEMINI_TTS_QUALITY_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              <div className="mt-1 text-[11px] leading-relaxed text-ink-tertiary">
+                در حالت «خودکار» یا «Lite رایگان»، بیشترین سهمیه رایگان روزانه استفاده می‌شود و در صورت پر شدن سهمیه یک مدل، سیستم خودکار به مدل بعدی سوییچ می‌کند.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
