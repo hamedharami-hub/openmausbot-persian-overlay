@@ -42,6 +42,16 @@ describe("bot now", () => {
     expect(botNow({ ...base, turnStartedAt: now + 60 * 60_000, busy: true }, [], 0, now).startedAt).toBeNull();
   });
 
+  it("lists only coordination the transcript records, newest first, without inventing teammates", () => {
+    const comm = (withBotId: string, withName: string, at: number): Message => ({ id: `c-${withBotId}-${at}`, role: "bot", kind: "activity", at,
+      comm: { groupId: "g", withBotId, withName, withColor: "teal" } });
+    const rows = [comm("peer-a", "Mira", now - 90_000), comm("peer-b", "Oz", now - 30_000), comm("peer-a", "Mira", now - 10_000)];
+    const result = botNow({ ...base, waitingForTeammates: true }, rows, 0, now);
+    expect(result.waitingForTeammates).toBe(true);
+    expect(result.collaborators.map((peer) => [peer.name, peer.lastAt])).toEqual([["Mira", now - 10_000], ["Oz", now - 30_000]]);
+    expect(botNow(base, [], 0, now)).toMatchObject({ waitingForTeammates: false, collaborators: [] });
+  });
+
   it("shows the current task title only while the task is live", () => {
     const tasks = [{ threadId: "thread", title: "Find jobs", createdAt: 1, busy: true, modelSelection: { instanceId: "e", model: "m" } }] as Bot["tasks"];
     expect(botNow({ ...base, busy: true, tasks }, [], 0, now).missionTitle).toBe("Find jobs");

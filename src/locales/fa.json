@@ -914,5 +914,8 @@
   "botPanel.memory.forgotten": "از حافظه حذف شد.",
   "botPanel.memory.undo": "واگرد",
   "botPanel.memory.undoUnavailable": "این تغییر از اینجا قابل واگرد نیست: {reason}",
-  "botPanel.memory.undoNoRoute": "یادداشت‌های خودت در Team Cloud هنوز واگرد ندارند"
+  "botPanel.memory.undoNoRoute": "یادداشت‌های خودت در Team Cloud هنوز واگرد ندارند",
+  "botNow.collab.label": "هماهنگی ثبت‌شده با",
+  "botNow.collab.waiting": "منتظر یک همکار",
+  "botNow.collab.waitingOnly": "منتظر یک همکار است؛ هنوز انتقال کاری در این گفتگو ثبت نشده."
 }

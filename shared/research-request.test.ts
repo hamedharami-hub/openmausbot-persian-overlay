@@ -25,6 +25,8 @@ describe("request-scoped research guidance", () => {
           expect(instructions).toContain("without a url argument");
           expect(instructions).toContain("date of the underlying data");
           expect(instructions).toContain("mark it unknown");
+          expect(instructions).toContain("one owner per sub-task");
+          expect(instructions).toContain("not independent verification");
           expect(instructions).toContain("not enforced");
           expect(instructions).toContain("grant no tools or permissions");
         }

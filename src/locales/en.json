@@ -7361,5 +7361,8 @@
   "botPanel.memory.forgotten": "Removed from its memory.",
   "botPanel.memory.undo": "Undo",
   "botPanel.memory.undoUnavailable": "This change cannot be undone here: {reason}",
-  "botPanel.memory.undoNoRoute": "your own notes on a Team Cloud have no undo yet"
+  "botPanel.memory.undoNoRoute": "your own notes on a Team Cloud have no undo yet",
+  "botNow.collab.label": "Coordination recorded with",
+  "botNow.collab.waiting": "waiting for a teammate",
+  "botNow.collab.waitingOnly": "Waiting for a teammate; no hand-off is recorded in this conversation yet."
 }

@@ -23,6 +23,17 @@ future beyond clock skew). Answers older than 24 hours, webhook-written lines an
 undated rows are ignored. The card carries a permanent note that silence or a
 reply is not proof that work finished, and shows no percentage.
 
+## Coordination in the Now card
+
+The card also shows coordination only where the transcript records it: the
+teammates named by hand-off rows (newest first, capped at five, with the time of
+the latest row) and whether the server reports the task is waiting for a
+teammate. When it is waiting and no hand-off row exists, it says exactly that
+instead of listing a teammate. It never claims a teammate reviewed or verified
+anything; the request guidance tells the model that a teammate's answer is not
+independent verification unless it used separate evidence, and that one owner
+per sub-task plus one synthesis is expected. That is guidance, not enforcement.
+
 ## Memory note provenance
 
 Memory bullets already carry the server's entry grammar
@@ -46,7 +57,7 @@ than "in Settings", since both surfaces write through the same route.
 ## Checks
 
 ```sh
-pnpm exec vitest run src/lib/bot-now.test.ts src/components/bot-settings/BotNowCard.test.ts src/components/bot-panel/memory-notes.test.ts src/components/bot-panel/MemoryPage.team.test.ts src/lib/memory.test.ts src/components/bot-settings/MemorySection.test.ts src/components/BotSettingsDialog.simple.test.ts src/components/bot-panel/MemoryPage.undo.test.ts --maxWorkers=1
+pnpm exec vitest run src/lib/bot-now.test.ts src/components/bot-settings/BotNowCard.test.ts src/components/bot-panel/memory-notes.test.ts src/components/bot-panel/MemoryPage.team.test.ts src/lib/memory.test.ts src/components/bot-settings/MemorySection.test.ts src/components/BotSettingsDialog.simple.test.ts src/components/bot-panel/MemoryPage.undo.test.ts shared/research-request.test.ts --maxWorkers=1
 ```
 
 Unit tests cover absent evidence, blockers, outcome labelling, stale and
@@ -73,6 +84,10 @@ says it can be reverted. When
 the journal says a change cannot be restored (too large, or text that had to be
 redacted), the recorded reason is shown instead. The offer is cleared by the
 next write, so a later edit cannot be silently overwritten by a stale undo.
+
+The coordination facts are covered by unit tests that invent no teammate from a
+busy flag, keep the newest row per teammate, and render the waiting-with-none
+sentence.
 
 ## Not covered
 

@@ -29,6 +29,17 @@ describe("BotNowCard", () => {
     expect(html).toContain("botNow.scope");
   });
 
+  it("names only the teammates a hand-off row proves, and says when waiting with none recorded", () => {
+    const comm = { id: "c1", role: "bot" as const, kind: "activity" as const, at: now - 5_000, comm: { groupId: "g", withBotId: "oz", withName: "Oz", withColor: "teal" as const } };
+    const html = renderToStaticMarkup(createElement(BotNowCard, { bot: { ...bot, waitingForTeammates: true, messages: [comm] } }));
+    expect(html).toContain("botNow.collab.label");
+    expect(html).toContain("Oz");
+    expect(html).toContain("botNow.collab.waiting");
+    const none = renderToStaticMarkup(createElement(BotNowCard, { bot: { ...bot, waitingForTeammates: true, messages: [] } }));
+    expect(none).toContain("botNow.collab.waitingOnly");
+    expect(none).toContain("botNow.collab.waitingOnly");
+  });
+
   it("says not established instead of guessing when nothing is recorded", () => {
     const html = renderToStaticMarkup(createElement(BotNowCard, { bot: { ...bot, busy: false, messages: [] } }));
     expect(html).toContain("botNow.state.unknown");

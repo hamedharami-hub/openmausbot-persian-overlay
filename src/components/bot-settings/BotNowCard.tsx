@@ -36,6 +36,19 @@ export function BotNowCard({ bot, queued = 0 }: { bot: Bot; queued?: number }) {
         </p>
       )}
       {now.queued > 0 && <p className="mt-2 text-[13px] text-ink-secondary">{t("botNow.queued", { count: String(now.queued) })}</p>}
+      {now.collaborators.length > 0 && (
+        <div data-bot-now-collaborators className="mt-2 text-[13px] text-ink-secondary">
+          <p>{t("botNow.collab.label")}{now.waitingForTeammates ? ` · ${t("botNow.collab.waiting")}` : ""}</p>
+          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            {now.collaborators.map((peer) => (
+              <li key={peer.botId} className="text-ink" dir="auto">{peer.name} <span className="text-ink-tertiary">{when(peer.lastAt)}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {now.collaborators.length === 0 && now.waitingForTeammates && (
+        <p data-bot-now-collaborators className="mt-2 text-[13px] text-ink-secondary">{t("botNow.collab.waitingOnly")}</p>
+      )}
       <div className="mt-2 text-[13px]">
         {now.lastResult ? (
           <>
