@@ -1,0 +1,38 @@
+name: Full test suite
+on:
+  workflow_dispatch:
+  push:
+    branches: [local/0.1.136-persian-overlay]
+    paths:
+      - server/**
+      - src/**
+      - shared/**
+      - companion/**
+permissions:
+  contents: read
+concurrency:
+  group: full-suite-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.0'
+      - run: pnpm install --frozen-lockfile
+      - name: Install audio decoder used by the voice duration tests
+        run: |
+          if ! command -v ffmpeg; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+      - run: pnpm exec vitest run --maxWorkers=2
