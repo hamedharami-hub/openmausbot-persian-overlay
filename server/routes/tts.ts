@@ -89,9 +89,13 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       // Replies speak while they are still being written, from text no stored message has scrubbed yet: held secrets
       // are known only here, so they are masked here. The first block is short so the first sound comes soon.
       const text = redactSecretsInText(String(body.text ?? ""));
+      const provider = tts.voiceProvider(cfg);
+      const utterances = provider === "gemini"
+        ? toUtterances(text, { minChars: 2400, maxChars: 2800 })
+        : toUtterances(text, { firstBlockMaxChars: VOICE_FIRST_BLOCK_MAX_CHARS });
       return json(res, 200, {
         ready: tts.voiceReady(cfg, typeof body.voiceId === "string" ? body.voiceId : undefined),
-        utterances: toUtterances(text, { firstBlockMaxChars: VOICE_FIRST_BLOCK_MAX_CHARS }),
+        utterances,
       });
     }
     if (method === "GET" && path === "/api/tts/voices") {
@@ -122,8 +126,9 @@ export function createTtsRoutes(deps: TtsRouteDeps): RouteHandler {
       const body = await readBody(req);
       const text = String(body.text ?? "").trim();
       if (!text) return json(res, 400, { error: "text required" });
+      const maxChars = tts.voiceProvider(cfg) === "gemini" ? 8000 : 500;
       // A hard ceiling, so an arbitrary local request cannot turn the hosted voice account into an unbounded billable job.
-      if (text.length > 500) return json(res, 413, { error: "voice utterances are limited to 500 characters" });
+      if (text.length > maxChars) return json(res, 413, { error: `voice utterances are limited to ${maxChars} characters` });
       try {
         const voiceId = typeof body.voiceId === "string" ? body.voiceId : undefined;
         const cacheKey = ttsCacheKey(cfg, text, voiceId);

@@ -3,8 +3,16 @@ import type { Audio, Voice } from "./tts/elevenlabs.ts";
 
 const API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models";
 export const GEMINI_TTS_MODEL = "gemini-3.8-flash-tts";
+export const GEMINI_TTS_FALLBACK_MODELS = [
+  "gemini-3.8-flash-lite-tts",
+  "gemini-3.1-flash-tts-preview",
+  "gemini-2.5-flash-preview-tts",
+  "gemini-3.8-flash-tts",
+] as const;
 export const GEMINI_STT_MODEL = "gemini-3.6-flash";
 export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+export const MAX_GEMINI_TTS_CHARS = 8000;
+const modelCooldownUntil = new Map<string, number>();
 export const GEMINI_VOICES: Voice[] = [
   { id: "Kore", label: "Kore · کوره (زن · جدی و شفاف)", description: "Persian / English · firm, clear" },
   { id: "Aoede", label: "Aoede · آئوده (زن · صمیمی و روان)", description: "Persian / English · breezy, natural" },
@@ -64,19 +72,48 @@ export function pcmToWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
 }
 
 export async function synthesizeGemini(text: string, voice: string, key: string, fetcher = fetch): Promise<Audio> {
-  if (!text.trim() || text.length > 500) throw new Error("Voice text must contain 1–500 characters.");
+  if (!text.trim() || text.length > MAX_GEMINI_TTS_CHARS) {
+    throw new Error(`Voice text must contain 1–${MAX_GEMINI_TTS_CHARS} characters.`);
+  }
   const voiceName = GEMINI_VOICES.some((v) => v.id === voice) ? voice : "Kore";
-  const parts = await generate(key, GEMINI_TTS_MODEL, {
+  const reqBody = {
     contents: [{ parts: [{ text }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
     },
-  }, fetcher);
+  };
+  const now = Date.now();
+  const candidates = fetcher === fetch
+    ? [
+        ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => (modelCooldownUntil.get(m) ?? 0) <= now),
+        ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => (modelCooldownUntil.get(m) ?? 0) > now),
+      ]
+    : [GEMINI_TTS_MODEL, ...GEMINI_TTS_FALLBACK_MODELS.filter((m) => m !== GEMINI_TTS_MODEL)];
+
+  let parts: Array<{ text?: string; thought?: boolean; inlineData?: { data: string; mimeType: string } }> | undefined;
+  let lastError: unknown;
+  for (const model of candidates) {
+    try {
+      parts = await generate(key, model, reqBody, fetcher);
+      modelCooldownUntil.delete(model);
+      break;
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (fetcher !== fetch) break;
+      if (/HTTP (429|500|502|503|504)|failed or timed out/i.test(msg)) {
+        modelCooldownUntil.set(model, Date.now() + 10 * 60 * 1000);
+        continue;
+      }
+      break;
+    }
+  }
+  if (!parts) throw (lastError instanceof Error ? lastError : new Error("Gemini voice request failed."));
   const audio = parts.find((p) => p.inlineData)?.inlineData;
   if (!audio?.data) throw new Error("Gemini returned no audio.");
   const bytes = Buffer.from(audio.data, "base64");
-  if (bytes.length > 10 * 1024 * 1024) throw new Error("Gemini audio response is too large.");
+  if (bytes.length > 25 * 1024 * 1024) throw new Error("Gemini audio response is too large.");
   if (/^audio\/(?:x-)?wav(?:;|$)/i.test(audio.mimeType) && bytes.length >= 44 && bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WAVE") {
     return { bytes, mime: "audio/wav" };
   }

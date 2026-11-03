@@ -113,6 +113,8 @@ export class Speaker {
   private blobCache = new Map<string, { blob: Blob; ts: number }>();
   private ratePref = 1;
   private activeBlobs: Blob[] = [];
+  private activeUtterances: string[] = [];
+  private activeVoiceId: string | undefined = undefined;
   private navRequest: { targetBlock: number; offsetSec?: number } | null = null;
   private activeBlockControl: { currentIndex: () => number; total: () => number } | null = null;
   private token = 0;
@@ -250,8 +252,35 @@ export class Speaker {
   }
 
   async downloadCurrentAudio(filenamePrefix = "openmausbot-voice"): Promise<boolean> {
-    if (!this.activeBlobs.length || typeof document === "undefined") return false;
-    const merged = await mergeWavOrAudioBlobs(this.activeBlobs);
+    if ((!this.activeBlobs.length && !this.activeUtterances.length) || typeof document === "undefined") return false;
+    const blobs: Blob[] = [];
+    const total = Math.max(this.activeUtterances.length, this.activeBlobs.length);
+    for (let i = 0; i < total; i++) {
+      const existing = this.activeBlobs[i];
+      if (existing) {
+        blobs.push(existing);
+        continue;
+      }
+      const utterance = this.activeUtterances[i];
+      if (!utterance) continue;
+      const cacheKey = `${this.activeVoiceId ?? ""}:${utterance}`;
+      const cached = this.getCachedBlob(cacheKey);
+      if (cached) {
+        this.activeBlobs[i] = cached;
+        blobs.push(cached);
+        continue;
+      }
+      try {
+        const fetched = await this.render(utterance, this.activeVoiceId, new AbortController().signal);
+        this.setCachedBlob(cacheKey, fetched);
+        this.activeBlobs[i] = fetched;
+        blobs.push(fetched);
+      } catch {
+        // skip failed block if any
+      }
+    }
+    if (!blobs.length) return false;
+    const merged = await mergeWavOrAudioBlobs(blobs);
     const ext = merged.type.includes("wav") ? "wav" : "mp3";
     const url = URL.createObjectURL(merged);
     try {
@@ -273,6 +302,8 @@ export class Speaker {
     this.navRequest = null;
     this.activeBlockControl = null;
     this.activeBlobs = [];
+    this.activeUtterances = [];
+    this.activeVoiceId = undefined;
     const external = this.externalClaim;
     this.externalClaim = null;
     external?.pause();
@@ -419,6 +450,8 @@ export class Speaker {
       let index = 0;
       let playedAll = false;
       this.activeBlobs = [];
+      this.activeUtterances = pending;
+      this.activeVoiceId = opts.voiceId;
       this.activeBlockControl = {
         currentIndex: () => Math.max(0, index - 1),
         total: () => pending.length,
@@ -426,7 +459,16 @@ export class Speaker {
       for (;;) {
         for (let b = index; b < Math.min(pending.length, index + PREFETCH_WINDOW); b++) {
           if (!inFlight.has(b) && !resolvedBlobs.has(b)) {
-            inFlight.set(b, render(pending[b]!, b));
+            inFlight.set(
+              b,
+              render(pending[b]!, b).then((res) => {
+                if ("blob" in res && res.blob) {
+                  resolvedBlobs.set(b, res.blob);
+                  this.activeBlobs[b] = res.blob;
+                }
+                return res;
+              }),
+            );
           }
         }
         if (index >= pending.length) {

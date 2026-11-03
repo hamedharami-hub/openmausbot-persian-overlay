@@ -103,33 +103,26 @@ export function MiniAudioPlayer({ className }: { className?: string }) {
         </button>
       </div>
 
-      <div className="flex min-w-[140px] flex-1 items-center gap-2">
-        <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-secondary">
-          {formatClock(current)}
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={duration > 0 ? duration : 1}
-          step={0.1}
-          value={duration > 0 ? current : 0}
-          disabled={isPreparing || duration <= 0}
-          onChange={(e) => speaker.seek(Number(e.target.value))}
-          aria-label="Seek audio position"
-          className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-inset accent-accent disabled:cursor-default disabled:opacity-50"
-        />
-        <span className="w-8 shrink-0 font-mono text-[11px] tabular-nums text-ink-secondary">
-          {formatClock(duration)}
-        </span>
-      </div>
-
-      {playback.totalBlocks > 1 && (
-        <span
-          className="rounded-md bg-inset px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-ink-secondary"
-          title="بخش در حال پخش"
-        >
-          {playback.blockIndex + 1}/{playback.totalBlocks}
-        </span>
+      {playback.totalBlocks <= 1 && (
+        <div className="flex min-w-[140px] flex-1 items-center gap-2">
+          <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-secondary">
+            {formatClock(current)}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={duration > 0 ? duration : 1}
+            step={0.1}
+            value={duration > 0 ? current : 0}
+            disabled={isPreparing || duration <= 0}
+            onChange={(e) => speaker.seek(Number(e.target.value))}
+            aria-label="Seek audio position"
+            className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-inset accent-accent disabled:cursor-default disabled:opacity-50"
+          />
+          <span className="w-8 shrink-0 font-mono text-[11px] tabular-nums text-ink-secondary">
+            {formatClock(duration)}
+          </span>
+        </div>
       )}
 
       <div className="flex items-center gap-1">
