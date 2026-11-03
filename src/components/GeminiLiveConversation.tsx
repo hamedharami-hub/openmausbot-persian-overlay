@@ -55,12 +55,12 @@ export function GeminiLiveConversation({ threadId, className }: { threadId?: str
       <div className="flex items-center gap-1.5">
         {live ? (
           <button type="button" onClick={stop} aria-label={t("composer.geminiLive.stop")} className={cn(button, "bg-danger/15 text-danger hover:bg-danger/25")}>
-            <PhoneOff size={14} /> {t("composer.geminiLive.stop")}
+            <PhoneOff size={14} /> <span className="@max-[30rem]/composer:hidden">{t("composer.geminiLive.stop")}</span>
           </button>
         ) : (
           <button type="button" onClick={start} aria-label={t("composer.geminiLive.start")} className={cn(button, "text-ink-secondary hover:bg-raised hover:text-ink")}>
             {phase === "error" ? <Radio size={14} className="text-danger" /> : <Radio size={14} />}
-            {t("composer.geminiLive.start")}
+            <span className="@max-[30rem]/composer:hidden">{t("composer.geminiLive.start")}</span>
           </button>
         )}
       </div>
