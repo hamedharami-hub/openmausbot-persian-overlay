@@ -7,7 +7,7 @@ import { mentionChoicesForQuery, mentionQueryAt } from "@/lib/mentions";
 import { mapMessageTargets, sentToSummary } from "@/lib/map-composer";
 import { imeComposing, sendsMessage, useSendKey } from "@/lib/send-key";
 import { useShowThreads } from "@/lib/thread-preferences";
-import { MentionMenu, type MentionChoice } from "./MentionMenu";
+import { MentionMenu, sortBotsPinnedFirst, type MentionChoice } from "./MentionMenu";
 import { MentionTextarea } from "./MentionTextarea";
 import { useMenuMotion } from "./MenuMotion";
 
@@ -42,7 +42,7 @@ export function MapComposer({ bots, teams, onTagged, onSent }: {
     const pool: MentionChoice[] = [
       ...(visible.length > 1 ? [{ id: "__everyone__", name: "everyone", all: { count: visible.length } }] : []),
       ...teams.filter((team) => team.count > 0).map((team) => ({ id: `team:${team.key}`, name: team.name, team: { count: team.count } })),
-      ...visible.map((bot) => ({ id: bot.id, name: bot.name, bot })),
+      ...sortBotsPinnedFirst(visible).map((bot) => ({ id: bot.id, name: bot.name, bot })),
     ];
     return mentionChoicesForQuery(pool, mention.query);
   }, [mention, dismissedAt, visible, teams]);
