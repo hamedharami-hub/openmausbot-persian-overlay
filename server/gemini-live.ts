@@ -59,15 +59,24 @@ export function decodeGeminiLiveFrame(raw: string): LiveEvent[] {
   catch { return []; }
   const events: LiveEvent[] = [];
   if (data.setupComplete) events.push({ kind: "ready" });
-  const serverContent = data.serverContent as { modelTurn?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string }; text?: string }> }; turnComplete?: boolean } | undefined;
+  const serverContent = data.serverContent as {
+    modelTurn?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string }; text?: string }> };
+    turnComplete?: boolean;
+    outputTranscription?: { text?: string };
+    inputTranscription?: { text?: string };
+    interimInputTranscription?: { text?: string };
+  } | undefined;
   for (const part of serverContent?.modelTurn?.parts ?? []) {
     if (part.inlineData?.data) events.push({ kind: "audio", data: part.inlineData.data, mimeType: part.inlineData.mimeType ?? "audio/pcm;rate=24000" });
   }
   if (serverContent?.turnComplete) events.push({ kind: "turn", complete: true });
-  const output = data.outputTranscription as { text?: string } | undefined;
+  // The transcriptions live inside serverContent; some builds also repeat them at the top level.
+  const output = (serverContent?.outputTranscription ?? data.outputTranscription) as { text?: string } | undefined;
   if (output?.text) events.push({ kind: "caption", text: output.text, role: "assistant" });
-  const input = data.inputTranscription as { text?: string } | undefined;
+  const input = (serverContent?.inputTranscription ?? data.inputTranscription) as { text?: string } | undefined;
   if (input?.text) events.push({ kind: "caption", text: input.text, role: "user" });
+  const interim = (serverContent?.interimInputTranscription ?? data.interimInputTranscription) as { text?: string } | undefined;
+  if (interim?.text) events.push({ kind: "caption", text: interim.text, role: "user" });
   return events;
 }
 

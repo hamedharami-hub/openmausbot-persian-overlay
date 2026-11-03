@@ -42,8 +42,10 @@ describe("Gemini Live protocol", () => {
       serverContent: { modelTurn: { parts: [{ inlineData: { data: "AAAA", mimeType: "audio/pcm;rate=24000" } }] }, turnComplete: true },
     }));
     expect(audio).toEqual([{ kind: "audio", data: "AAAA", mimeType: "audio/pcm;rate=24000" }, { kind: "turn", complete: true }]);
+    expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { outputTranscription: { text: "سلام" } } }))).toEqual([{ kind: "caption", text: "سلام", role: "assistant" }]);
+    expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { inputTranscription: { text: "hi" } } }))).toEqual([{ kind: "caption", text: "hi", role: "user" }]);
+    expect(decodeGeminiLiveFrame(JSON.stringify({ serverContent: { interimInputTranscription: { text: "در حال" } } }))).toEqual([{ kind: "caption", text: "در حال", role: "user" }]);
     expect(decodeGeminiLiveFrame(JSON.stringify({ outputTranscription: { text: "سلام" } }))).toEqual([{ kind: "caption", text: "سلام", role: "assistant" }]);
-    expect(decodeGeminiLiveFrame(JSON.stringify({ inputTranscription: { text: "hi" } }))).toEqual([{ kind: "caption", text: "hi", role: "user" }]);
     expect(decodeGeminiLiveFrame("not json")).toEqual([]);
     expect(decodeGeminiLiveFrame(JSON.stringify({ usageMetadata: { totalTokenCount: 3 } }))).toEqual([]);
   });
