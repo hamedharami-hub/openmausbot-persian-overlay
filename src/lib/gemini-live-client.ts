@@ -56,10 +56,10 @@ export interface GeminiLiveSession {
  */
 export function openGeminiLiveConversation(options: GeminiLiveClientOptions): GeminiLiveSession {
   const socketFactory = options.createSocket ?? (() => new WebSocket(options.url));
-  const params = new URLSearchParams();
-  if (options.threadId) params.set("threadId", options.threadId);
-  if (options.voice) params.set("voice", options.voice);
-  const query = params.toString();
+  const parts: string[] = [];
+  if (options.threadId) parts.push(`threadId=${encodeURIComponent(options.threadId)}`);
+  if (options.voice) parts.push(`voice=${encodeURIComponent(options.voice)}`);
+  const query = parts.join("&");
   const url = query
     ? `${options.url}${options.url.includes("?") ? "&" : "?"}${query}`
     : options.url;

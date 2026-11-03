@@ -1,7 +1,7 @@
-import { Loader2, Square, Volume2 } from "lucide-react";
+import { Loader2, Pause, Play, Volume2 } from "lucide-react";
 
 import { speaker } from "@/lib/tts";
-import { useSpeech } from "@/lib/tts/useSpeech";
+import { useSpeech, useSpeechPlayback } from "@/lib/tts/useSpeech";
 import type { ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -37,20 +37,34 @@ export function useSpeakAction({ text, botId, messageId, voiceId, tts, localVoic
 }
 
 export function SpeakButton({ className, ...args }: SpeakArgs & { className?: string }) {
-  const { ready, mine, preparing, label, toggle } = useSpeakAction(args);
+  const { ready, mine, preparing, label } = useSpeakAction(args);
+  const playback = useSpeechPlayback();
+  const paused = mine && playback.paused;
+  const onClick = () => {
+    if (preparing) return speaker.stop();
+    if (mine) return speaker.togglePause();
+    void speaker.speak(args.text, { botId: args.botId, messageId: args.messageId, voiceId: args.voiceId });
+  };
+  const buttonTitle = mine ? (paused ? "ادامه پخش صدا (Play)" : "توقف موقت صدا (Pause)") : label;
   return (
     <button
-      onClick={toggle}
+      onClick={onClick}
       disabled={!ready}
-      aria-label={label}
-      title={label}
+      aria-label={buttonTitle}
+      title={buttonTitle}
       className={cn(
         "rounded-md p-1.5 text-ink-secondary transition-opacity hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-secondary",
         mine ? "text-accent opacity-100" : "opacity-0 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 touch:opacity-100",
         className,
       )}
     >
-      {preparing ? <Loader2 {...ACTION_ICON} className="animate-spin" /> : mine ? <Square {...ACTION_ICON} className="fill-current" /> : <Volume2 {...ACTION_ICON} />}
+      {preparing ? (
+        <Loader2 {...ACTION_ICON} className="animate-spin" />
+      ) : mine ? (
+        paused ? <Play {...ACTION_ICON} className="fill-current" /> : <Pause {...ACTION_ICON} className="fill-current" />
+      ) : (
+        <Volume2 {...ACTION_ICON} />
+      )}
     </button>
   );
 }

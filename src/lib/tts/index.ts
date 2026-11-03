@@ -56,29 +56,6 @@ const IDLE: SpeechSnapshot = { status: "idle" };
 const PREFETCH_WINDOW = 3;
 const CLIENT_CACHE_TTL_MS = 12 * 3600 * 1000;
 const CLIENT_CACHE_MAX = 150;
-const clientBlobCache = new Map<string, { blob: Blob; ts: number }>();
-
-function getCachedBlob(key: string): Blob | null {
-  const entry = clientBlobCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CLIENT_CACHE_TTL_MS) {
-    clientBlobCache.delete(key);
-    return null;
-  }
-  return entry.blob;
-}
-
-function setCachedBlob(key: string, blob: Blob): void {
-  if (clientBlobCache.size >= CLIENT_CACHE_MAX) {
-    const oldest = clientBlobCache.keys().next().value;
-    if (oldest) clientBlobCache.delete(oldest);
-  }
-  clientBlobCache.set(key, { blob, ts: Date.now() });
-}
-
-export function clearClientTtsCache(): void {
-  clientBlobCache.clear();
-}
 
 export function mergeAudioBlobs(blobs: Blob[]): Blob {
   if (blobs.length === 0) return new Blob([], { type: "audio/wav" });
@@ -133,6 +110,7 @@ export class Speaker {
   private watchers = new Set<(s: SpeechSnapshot) => void>();
   private playback: PlaybackDetails = DEFAULT_PLAYBACK;
   private playbackWatchers = new Set<(p: PlaybackDetails) => void>();
+  private blobCache = new Map<string, { blob: Blob; ts: number }>();
   private ratePref = 1;
   private activeBlobs: Blob[] = [];
   private navRequest: { targetBlock: number; offsetSec?: number } | null = null;
@@ -146,6 +124,28 @@ export class Speaker {
   private settleLocalSpeech: ((finished: boolean) => void) | null = null;
   /** Identity is the claim object, not the callback, so an older release cannot clear a newer claim. */
   private externalClaim: { pause: () => void } | null = null;
+
+  private getCachedBlob(key: string): Blob | null {
+    const entry = this.blobCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > CLIENT_CACHE_TTL_MS) {
+      this.blobCache.delete(key);
+      return null;
+    }
+    return entry.blob;
+  }
+
+  private setCachedBlob(key: string, blob: Blob): void {
+    if (this.blobCache.size >= CLIENT_CACHE_MAX) {
+      const oldest = this.blobCache.keys().next().value;
+      if (oldest) this.blobCache.delete(oldest);
+    }
+    this.blobCache.set(key, { blob, ts: Date.now() });
+  }
+
+  clearCache(): void {
+    this.blobCache.clear();
+  }
 
   subscribe(fn: (s: SpeechSnapshot) => void): () => void {
     this.watchers.add(fn);
@@ -398,8 +398,15 @@ export class Speaker {
     };
     const render = (utterance: string, block: number): Promise<Rendered> => {
       recordBlockTiming(opts.messageId, block, "renderStart");
+      const cacheKey = `${opts.voiceId ?? ""}:${utterance}`;
+      const cached = this.getCachedBlob(cacheKey);
+      if (cached) {
+        recordBlockTiming(opts.messageId, block, "renderDone");
+        return Promise.resolve({ blob: cached });
+      }
       return this.render(utterance, opts.voiceId, controller.signal).then(
         (blob) => {
+          this.setCachedBlob(cacheKey, blob);
           recordBlockTiming(opts.messageId, block, "renderDone");
           return { blob };
         },
@@ -407,15 +414,22 @@ export class Speaker {
       );
     };
     const run = async (): Promise<void> => {
-      const inFlight: Promise<Rendered>[] = [];
+      const inFlight = new Map<number, Promise<Rendered>>();
+      const resolvedBlobs = new Map<number, Blob>();
       let index = 0;
       let playedAll = false;
+      this.activeBlobs = [];
+      this.activeBlockControl = {
+        currentIndex: () => Math.max(0, index - 1),
+        total: () => pending.length,
+      };
       for (;;) {
-        while (inFlight.length < PREFETCH_WINDOW && index + inFlight.length < pending.length) {
-          const block = index + inFlight.length;
-          inFlight.push(render(pending[block]!, block));
+        for (let b = index; b < Math.min(pending.length, index + PREFETCH_WINDOW); b++) {
+          if (!inFlight.has(b) && !resolvedBlobs.has(b)) {
+            inFlight.set(b, render(pending[b]!, b));
+          }
         }
-        if (!inFlight.length) {
+        if (index >= pending.length) {
           if (closed || !live()) {
             playedAll = closed;
             break;
@@ -424,30 +438,52 @@ export class Speaker {
           wake = null;
           continue;
         }
-        const current = inFlight.shift()!;
         const at = index;
         index += 1;
-        const rendered = await current;
-        if ("error" in rendered) {
-          if (live()) {
-            this.set({ ...IDLE, error: rendered.error instanceof Error ? rendered.error.message : String(rendered.error) });
+        let blob = resolvedBlobs.get(at);
+        if (!blob) {
+          const current = inFlight.get(at) ?? render(pending[at]!, at);
+          inFlight.delete(at);
+          const rendered = await current;
+          if ("error" in rendered) {
+            if (live()) {
+              this.set({ ...IDLE, error: rendered.error instanceof Error ? rendered.error.message : String(rendered.error) });
+            }
+            controller.abort();
+            return;
           }
-          controller.abort();
-          return;
+          blob = rendered.blob;
+          resolvedBlobs.set(at, blob);
+          this.activeBlobs[at] = blob;
         }
         if (!live()) {
           controller.abort();
           return;
         }
+        const navOffset = this.navRequest?.offsetSec;
+        this.navRequest = null;
         this.set({ status: "speaking", botId: opts.botId, messageId: opts.messageId, caption: pending[at]! });
-        const played = await this.play(rendered.blob, live, opts.messageId, at);
+        this.setPlayback({
+          paused: false,
+          blockIndex: at,
+          totalBlocks: pending.length,
+          canDownload: true,
+        });
+        const played = await this.play(blob, live, opts.messageId, at, navOffset);
+        if (this.navRequest && live()) {
+          index = Math.max(0, Math.min(pending.length - 1, this.navRequest.targetBlock));
+          continue;
+        }
         if (!played || !live()) {
           if (live()) this.set({ ...IDLE, error: "The generated voice clip couldn't be played." });
           controller.abort();
           return;
         }
       }
-      if (playedAll && live() && !finished) this.set(IDLE);
+      if (playedAll && live() && !finished) {
+        this.set(IDLE);
+        this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref });
+      }
       if (this.request === controller) this.request = null;
     };
     const kick = () => {
@@ -579,12 +615,13 @@ export class Speaker {
     return res.blob();
   }
 
-  private play(blob: Blob, live: () => boolean, probeMessageId?: string, probeBlock?: number): Promise<boolean> {
+  private play(blob: Blob, live: () => boolean, probeMessageId?: string, probeBlock?: number, initialOffsetSec?: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (!live()) return resolve(false);
       this.teardownAudio();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      try { audio.playbackRate = this.ratePref; } catch { /* ignore */ }
       this.audio = audio;
       this.objectUrl = url;
       let settled = false;
@@ -593,6 +630,8 @@ export class Speaker {
         settled = true;
         audio.onended = null;
         audio.onerror = null;
+        audio.ontimeupdate = null;
+        audio.onloadedmetadata = null;
         if (probeMessageId !== undefined && probeBlock !== undefined) {
           recordBlockTiming(probeMessageId, probeBlock, "audioEnd");
         }
@@ -601,6 +640,18 @@ export class Speaker {
         resolve(ok);
       };
       this.settlePlayback = done;
+      audio.onloadedmetadata = () => {
+        const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+        if (initialOffsetSec !== undefined && dur > 0) {
+          const startAt = initialOffsetSec < 0 ? Math.max(0, dur - 5) : Math.min(dur, initialOffsetSec);
+          try { audio.currentTime = startAt; } catch { /* ignore */ }
+        }
+        this.setPlayback({ duration: dur, currentTime: audio.currentTime || 0 });
+      };
+      audio.ontimeupdate = () => {
+        const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : this.playback.duration;
+        this.setPlayback({ currentTime: audio.currentTime || 0, duration: dur });
+      };
       audio.onended = () => done(true);
       audio.onerror = () => done(false);
       audio.play().then(

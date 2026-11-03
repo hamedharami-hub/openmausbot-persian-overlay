@@ -40,6 +40,7 @@ import { ClusterLabel } from "./RoomClusterLabel";
 import { roomPin, useBotMessageMenu, userMessageMenu } from "./message-menu";
 import { RawMarkdownView, RawToggleAction } from "./RawMarkdownToggle";
 import { SpeakButton } from "./SpeakButton";
+import { MiniAudioPlayer } from "./MiniAudioPlayer";
 import { useSpeech } from "@/lib/tts/useSpeech";
 import { localSystemVoiceActive } from "@/lib/local-voice";
 import { CancelledTurnRow } from "./CancelledTurnRow";
@@ -196,8 +197,8 @@ function RoomTextMessage({
       <ReplyAction onReply={() => onReply(m)} />
       {canReact && m.from && <ReactAction threadId={group.threadId} message={m} />}
       {botText && <CopyButton text={botText} className={messageActionClass} />}
+      {botText && <SpeakButton text={botText} botId={speakerBot?.id} messageId={m.id} voiceId={speakerBot?.voice} tts={state.config?.tts} localVoice={localSystemVoiceActive()} className={cn(messageActionClass, speaking && "text-accent")} />}
       {botText && viewRaw && <RawToggleAction active onToggle={() => setViewRaw(false)} className={messageActionClass} />}
-      {botText && speaking && <SpeakButton text={botText} botId={speakerBot?.id} messageId={m.id} voiceId={speakerBot?.voice} tts={state.config?.tts} localVoice={localSystemVoiceActive()} className={cn(messageActionClass, "text-accent")} />}
     </MessageActions>
   );
   return (
@@ -1203,6 +1204,7 @@ export function GroupView({ group }: { group: Group }) {
       )}
 
       <div ref={composerDockRef} className="absolute inset-x-0 bottom-0 z-[2] chat-column-dock">
+      <MiniAudioPlayer />
       <RoomComposer
         key={group.threadId}
         group={group}
