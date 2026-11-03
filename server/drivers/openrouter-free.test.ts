@@ -99,18 +99,23 @@ describe("free OpenRouter models", () => {
     expect(freeDefault([])).toBeUndefined();
   });
 
-  it("keeps every free model and only the newest paid model from each provider", () => {
+  it("keeps every free model and the newest model of each branch, and drops retired generations", () => {
+    const now = Math.floor(Date.now() / 1000);
+    const day = 24 * 60 * 60;
     const rows = [
-      { id: "anthropic/claude-old", created: 1 },
-      { id: "anthropic/claude-new", created: 2 },
-      { id: "anthropic/claude-new:batch", created: 3 },
-      { id: "openai/gpt-new", created: 2 },
-      { id: "vendor/model:free", created: 1 },
-      { id: "vendor/zero-price", created: 1, pricing: { prompt: "0", completion: "0" } },
+      { id: "anthropic/claude-sonnet-4.5", created: now - 30 * day },
+      { id: "anthropic/claude-sonnet-5.5", created: now - 2 * day },
+      { id: "anthropic/claude-opus-5.5", created: now - 3 * day },
+      { id: "anthropic/claude-opus-5.5:batch", created: now - 1 * day },
+      { id: "openai/gpt-4o-2024-11-20", created: now - 400 * day },
+      { id: "openai/gpt-6.1-terra", created: now - 1 * day },
+      { id: "vendor/model:free", created: now - 400 * day },
+      { id: "vendor/zero-price", created: now - 400 * day, pricing: { prompt: "0", completion: "0" } },
     ];
     expect(curatedOpenRouterRows(rows).map((row) => row.id)).toEqual([
-      "anthropic/claude-new",
-      "openai/gpt-new",
+      "anthropic/claude-sonnet-5.5",
+      "anthropic/claude-opus-5.5",
+      "openai/gpt-6.1-terra",
       "vendor/model:free",
       "vendor/zero-price",
     ]);

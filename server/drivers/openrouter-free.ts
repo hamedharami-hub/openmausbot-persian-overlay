@@ -88,20 +88,44 @@ export function freeToolsFirst(options: readonly Option[], freeTools: readonly s
 
 const modelProvider = (id: string): string => id.split("/")[0]?.toLowerCase() ?? "";
 
-/** OpenRouter's active catalog stays the source of truth: keep every free model and the newest paid model from each provider. */
+/** A model's branch, with its version numbers and dates removed: "anthropic/claude-sonnet-5.5" and
+ * "anthropic/claude-3.7-sonnet" both belong to the branch "anthropic/claude-sonnet". */
+export function openRouterFamily(id: string): string {
+  return id.split("/").map((part) => part.split("-").map((token) => token.replace(/\d+(?:\.\d+)*/g, "").replace(/\.+/g, "")).filter(Boolean).join("-")).filter(Boolean).join("/");
+}
+
+/** How long a branch stays in the list after its provider moved on: a branch whose newest model is older than this
+ * beside the provider's newest model is a retired generation. */
+export const BRANCH_AGE_DAYS = 270;
+
+/** OpenRouter's active catalog stays the source of truth: keep every free model and, from each branch of each
+ * provider, its newest model. Older versions of a branch never reach the model list. */
 export function curatedOpenRouterRows<T extends OpenRouterModelRow>(rows: readonly T[]): T[] {
   const valid = rows.filter((row): row is T & { id: string } => typeof row.id === "string" && row.id.includes("/"));
-  const newestPaid = new Map<string, T & { id: string }>();
+  const byProvider = new Map<string, (T & { id: string })[]>();
   for (const row of valid) {
-    if (isFreeModel(row) || row.id.endsWith(":batch")) continue;
+    if (row.id.endsWith(":batch")) continue;
     const provider = modelProvider(row.id);
-    const current = newestPaid.get(provider);
-    const created = typeof row.created === "number" ? row.created : 0;
-    const currentCreated = typeof current?.created === "number" ? current.created : 0;
-    if (!current || created > currentCreated || (created === currentCreated && row.id < current.id)) newestPaid.set(provider, row);
+    byProvider.set(provider, [...(byProvider.get(provider) ?? []), row]);
   }
   const keep = new Set(valid.filter(isFreeModel).map((row) => row.id));
-  for (const row of newestPaid.values()) keep.add(row.id);
+  for (const rows of byProvider.values()) {
+    const newestOfProvider = Math.max(...rows.map((row) => typeof row.created === "number" ? row.created : 0));
+    const window = BRANCH_AGE_DAYS * 24 * 60 * 60;
+    const newestOfBranch = new Map<string, T & { id: string }>();
+    for (const row of rows) {
+      if (isFreeModel(row)) continue;
+      const branch = openRouterFamily(row.id);
+      const current = newestOfBranch.get(branch);
+      const created = typeof row.created === "number" ? row.created : 0;
+      const currentCreated = typeof current?.created === "number" ? current.created : 0;
+      if (!current || created > currentCreated || (created === currentCreated && row.id < current.id)) newestOfBranch.set(branch, row);
+    }
+    for (const row of newestOfBranch.values()) {
+      const created = typeof row.created === "number" ? row.created : 0;
+      if (created >= newestOfProvider - window) keep.add(row.id);
+    }
+  }
   return valid.filter((row) => keep.has(row.id));
 }
 
