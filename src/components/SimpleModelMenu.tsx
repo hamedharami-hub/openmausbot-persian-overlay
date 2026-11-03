@@ -75,6 +75,16 @@ function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: Men
   );
 }
 
+export function PooledModelSections({ menu, onPick }: { menu: Pick<SimpleMenu, "starred" | "free">; onPick: SimpleMenuActions["onPick"] }) {
+  return <>{(["starred", "free"] as const).map((kind) => menu[kind].length > 0 && (
+    <div key={kind} role="group" aria-label={t(kind === "starred" ? "model.starred" : "model.free")} data-model-pool={kind} className="flex flex-col gap-0.5">
+      <div className={MENU_LABEL}>{t(kind === "starred" ? "model.starred" : "model.free")}</div>
+      {menu[kind].map(({ instance, row }) => <MenuModel key={`${instance.instanceId}:${row.option.id}`} instance={instance} row={row} onPick={onPick} />)}
+      <div role="separator" className={MENU_SEPARATOR} />
+    </div>
+  ))}</>;
+}
+
 function GroupBody({ group, props }: { group: MenuGroup; props: SimpleModelMenuProps }) {
   const { instance, body } = group;
   switch (body.kind) {
@@ -224,6 +234,7 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
       <div data-simple-models className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain",
         menu.groups.some((group) => group.body.kind === "models" && group.body.toggle === "less") && "scroll-pt-8 scroll-pb-12")}>
         <div className="flex flex-col gap-0.5 p-1.5">
+          <PooledModelSections menu={menu} onPick={props.onPick} />
           {current && (
             <button
               type="button"

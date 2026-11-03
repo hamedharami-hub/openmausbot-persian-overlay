@@ -1,4 +1,6 @@
 {
+  "model.starred": "ستاره‌دارها",
+  "model.free": "مدل‌های رایگان",
   "composer.cloudVoice.language": "زبان ضبط صدا",
   "composer.geminiLive.start": "مکالمهٔ زنده",
   "composer.geminiLive.stop": "پایان مکالمه",

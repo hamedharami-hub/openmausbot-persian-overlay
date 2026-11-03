@@ -21,7 +21,7 @@ import { ChatGptPlanStatus } from "./ChatGptPlanStatus";
 import { approvalModeFor, modelSwitchNeedsAsk } from "../../shared/approval-mode";
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";
-import { SimpleModelMenu, type SimpleThinking } from "./SimpleModelMenu";
+import { PooledModelSections, SimpleModelMenu, type SimpleThinking } from "./SimpleModelMenu";
 import { apiKeysLabel, ClaudeAccountSelect, engineStatus, FollowBotModelRow, ModelEngineRail, ModelRow, ModelSearch } from "./ModelPickerFull";
 import { MENU_LABEL, MENU_LINE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING } from "./menu-recipe";
 import { modelMenuKey, modelMenuPointerMove } from "./model-menu-keys";
@@ -36,6 +36,7 @@ import { threadsOnOwnModel } from "../../shared/thread-model";
 import { ThreadModelsLine } from "./ThreadModelsLine";
 import { Select } from "./Select";
 import { ModelStar } from "./ModelStar";
+import { curatedModels } from "@/lib/curated-models";
 import { modelStarKey, starredModelsFirst, useModelStars } from "@/lib/model-stars";
 
 const COMPACT_MODEL_COUNT = 5;
@@ -512,8 +513,9 @@ export function ModelPicker({
     close(true);
   } : undefined;
 
-  const official = railInstance ? starredModelsFirst(modelChoices(railInstance, railInstance.models.options.filter((option) => !option.custom)), railInstance.instanceId, stars) : [];
-  const custom = starredModelsFirst(railInstance?.models.options.filter((option) => option.custom) ?? [], railInstance?.instanceId ?? "", stars);
+  const retain = new Set(railInstance?.models.options.filter((option) => (railInstance.instanceId === selection.instanceId && option.id === selection.model) || stars.has(modelStarKey(railInstance.instanceId, option.id))).map((option) => option.id));
+  const official = railInstance ? starredModelsFirst(curatedModels(modelChoices(railInstance, railInstance.models.options.filter((option) => !option.custom)), retain), railInstance.instanceId, stars) : [];
+  const custom = starredModelsFirst(curatedModels(railInstance?.models.options.filter((option) => option.custom) ?? [], retain), railInstance?.instanceId ?? "", stars);
   const currentModel = selection.instanceId === railInstance?.instanceId
     ? official.find((option) => choiceIsSelected(option, selection))?.id : undefined;
   const filteredOfficial = filterCustomModels(official, query);
@@ -686,7 +688,7 @@ export function ModelPicker({
     </button>
   );
 
-  const simpleMenu = simpleView ? simpleModelMenu({
+  const simpleMenu = simpleModelMenu({
     instances: state.instances,
     listed: pickerInstances,
     selection,
@@ -697,7 +699,7 @@ export function ModelPicker({
     loading: loadingInstances,
     refreshing: refreshingId,
     stars,
-  }) : null;
+  });
 
   const fullPane = (
     <>
@@ -717,6 +719,7 @@ export function ModelPicker({
           onAddApiKeys={remote ? undefined : openApiKeys} />}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+          <div className="p-1.5"><PooledModelSections menu={simpleMenu} onPick={pick} /></div>
           {threadId && (
             <div className="shrink-0 border-b-[0.5px] border-ink/10 px-3.5 py-2">
               <div role="group" aria-label={t("model.scope.label")} className="flex gap-1">
@@ -982,7 +985,7 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
-      {simpleMenu ? (
+      {simpleView ? (
         <SimpleModelMenu
           menu={simpleMenu}
           query={query}

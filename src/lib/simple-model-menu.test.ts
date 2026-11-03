@@ -53,6 +53,23 @@ const rows = (built: Menu, index = 0) => {
 const body = (built: Menu, index = 0) => built.groups[index]!.body;
 
 describe("the Simple model menu", () => {
+  it("pools stars across providers including the current selection with original routes", () => {
+    const built = menu([claude(), codex], { stars: new Set([modelStarKey("claude", "sonnet-5"), modelStarKey("codex", "gpt-5.5")]) });
+    expect(built.starred.map(({ instance, row }) => [instance.instanceId, row.option.id, row.current])).toEqual([
+      ["claude", "sonnet-5", true], ["codex", "gpt-5.5", false],
+    ]);
+    expect(built.starred.every(({ row }) => Boolean(row.route))).toBe(true);
+  });
+
+  it("pools only explicitly free models, excluding subscription access and unavailable catalogs", () => {
+    const free = engine("router", "openai-compat", "Router", "api", [
+      { id: "a:free", label: "Alpha" }, { id: "b", label: "Beta (free)" },
+      { id: "go", label: "Go subscription" }, { id: "freebird", label: "Freebird" },
+    ]);
+    const built = menu([claude(), free, { ...free, instanceId: "blocked", policy: { organizationName: "Org" } } as InstanceInfo]);
+    expect(built.free.map(({ instance, row }) => [instance.instanceId, row.option.id])).toEqual([["router", "a:free"], ["router", "b"]]);
+  });
+
   it("keeps starred models first and visible when collapsed, expanded, or searching", () => {
     const stars = new Set([modelStarKey("claude", "sonnet-4-5")]);
     for (const expanded of [new Set<string>(), new Set(["claude"])]) {
@@ -88,7 +105,7 @@ describe("the Simple model menu", () => {
   it("lists every ready provider at once: the current one first, then sign-ins, API keys and local engines", () => {
     const built = menu([codex, openaiKey, pi, claude(), claudeKey]);
     expect(built.groups.map((group) => group.label)).toEqual(["Claude", "OpenAI", "OpenAI · API key", "Claude · API key", "pi"]);
-    expect(rows(built, 1)).toEqual(["GPT-5.6", "GPT-5.6 mini", "GPT-5.5"]);
+    expect(rows(built, 1)).toEqual(["GPT-5.6", "GPT-5.6 mini"]);
     expect(rows(built, 3)).toEqual(["Sonnet 5", "Fable 5.1"]);
   });
 
@@ -172,11 +189,11 @@ describe("the Simple model menu", () => {
   it("offers the bot's model to a thread on its own once, in the follow row, not again in its provider", () => {
     const own = menu([claude(), codex], { bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" }, follows: false } });
     expect(own.follow).toBe(true);
-    expect(rows(own, 1)).toEqual(["GPT-5.6 mini", "GPT-5.5"]);
+    expect(rows(own, 1)).toEqual(["GPT-5.6 mini"]);
     const onlyModel = menu([claude(), cursor], { bot: { name: "Pepper", selection: { instanceId: "cursor", model: "auto" }, follows: false } });
     expect(onlyModel.groups.map((group) => group.label)).toEqual(["Claude"]);
     expect(rows(menu([claude(), codex], { bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" } } }), 1))
-      .toEqual(["GPT-5.6", "GPT-5.6 mini", "GPT-5.5"]);
+      .toEqual(["GPT-5.6", "GPT-5.6 mini"]);
     const router = engine("router", "openai-compat", "OpenRouter", "api", [1, 2, 3, 4].map((index) => ({ id: `r-${index}`, label: `Router ${index}` })));
     const searched = menu([claude(), codex, router], { query: "gpt-5.6", bot: { name: "Pepper", selection: { instanceId: "codex", model: "gpt-5.6" }, follows: false } });
     expect(searched.follow).toBe(false);

@@ -5,6 +5,7 @@ import { filterCustomModels, partitionCustomModels, suggestedModels } from "./cu
 import { isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail } from "./engine-rail";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
 import { choiceIsSelected, modelChoices, type ModelChoice } from "./model-choices";
+import { curatedModels } from "./curated-models";
 import { modelStarKey, starredModelsFirst } from "./model-stars";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
@@ -54,7 +55,18 @@ export interface MenuCurrent {
   pending: boolean;
 }
 
+export interface PooledModelRow {
+  instance: InstanceInfo;
+  row: MenuModelRow;
+}
+
+export function isFreeModel(option: Pick<ModelOption, "id" | "label">): boolean {
+  return /(?:^|[-/:])free$/i.test(option.id) || /(?:\(free\)|\[free\]|(?:^|[·—–-]\s*)free)$/i.test(option.label.trim());
+}
+
 export interface SimpleMenu {
+  starred: PooledModelRow[];
+  free: PooledModelRow[];
   current: MenuCurrent | null;
   follow: boolean;
   groups: MenuGroup[];
@@ -140,7 +152,15 @@ function currentRow(input: SimpleMenuInput): MenuCurrent {
 
 export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   const { listed, selection, bot, expanded, probing } = input;
-  const models = new Map(listed.map((instance) => [instance.instanceId, listedModels(instance)]));
+  const models = new Map(listed.map((instance) => {
+    const available = listedModels(instance);
+    const retain = new Set(available.all.filter((option) =>
+      input.stars?.has(modelStarKey(instance.instanceId, option.id))
+      || (instance.instanceId === selection.instanceId && choiceIsSelected(option, selection))
+      || (instance.instanceId === bot.selection.instanceId && choiceIsSelected(option, bot.selection)))
+      .map((option) => option.id));
+    return [instance.instanceId, { ...available, all: curatedModels(available.all, retain) }] as const;
+  }));
   const total = listed.filter((instance) => !instance.policy && !needsCli(instance))
     .reduce((sum, instance) => sum + models.get(instance.instanceId)!.all.length, 0);
   const search = total > SIMPLE_SEARCH_AFTER;
@@ -196,7 +216,25 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
     return body ? [{ instance, ...named, body }] : [];
   });
 
+  const pooled = ordered.flatMap((instance): PooledModelRow[] => {
+    if (instance.policy || needsCli(instance)) return [];
+    const named = heading(instance, listed);
+    return filterCustomModels(models.get(instance.instanceId)!.all, query).map((option) => ({
+      instance,
+      row: {
+        option,
+        model: option.nativeModel,
+        variant: option.variant,
+        label: shortModelLabel(option.label, named.provider),
+        route: [named.label, option.provider].filter(Boolean).join(" · "),
+        current: instance.instanceId === selection.instanceId && choiceIsSelected(option, selection),
+      },
+    }));
+  });
+
   return {
+    starred: pooled.filter(({ instance, row }) => input.stars?.has(modelStarKey(instance.instanceId, row.option.id))),
+    free: pooled.filter(({ row }) => isFreeModel(row.option)),
     current: query ? null : currentRow(input),
     follow: !query && bot.follows === false,
     groups,

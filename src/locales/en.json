@@ -2761,6 +2761,8 @@
   "model.signInRequired": "Sign-in required",
   "model.ready": "Ready",
   "model.provider": "Provider: {name}",
+  "model.starred": "Starred",
+  "model.free": "Free",
   "model.search": "Search models",
   "model.searchLocal": "Search local models",
   "model.busy": "Stop this bot's turn before changing its model",
