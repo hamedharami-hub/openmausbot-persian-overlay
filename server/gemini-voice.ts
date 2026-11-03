@@ -6,9 +6,22 @@ export const GEMINI_TTS_MODEL = "gemini-3.8-flash-tts";
 export const GEMINI_STT_MODEL = "gemini-3.6-flash";
 export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 export const GEMINI_VOICES: Voice[] = [
-  { id: "Kore", label: "Kore", description: "Persian / English · firm" },
-  { id: "Aoede", label: "Aoede", description: "Persian / English · breezy" },
-  { id: "Puck", label: "Puck", description: "Persian / English · upbeat" },
+  { id: "Kore", label: "Kore · کوره (زن · جدی و شفاف)", description: "Persian / English · firm, clear" },
+  { id: "Aoede", label: "Aoede · آئوده (زن · صمیمی و روان)", description: "Persian / English · breezy, natural" },
+  { id: "Puck", label: "Puck · پاک (مرد · پرانرژی و گرم)", description: "Persian / English · upbeat, lively" },
+  { id: "Charon", label: "Charon · کارون (مرد · بم و رسمی)", description: "Persian / English · informative, deep" },
+  { id: "Fenrir", label: "Fenrir · فنریر (مرد · پرقدرت و سریع)", description: "Persian / English · excitable, resonant" },
+  { id: "Zephyr", label: "Zephyr · زفیر (زن · روشن و مهربان)", description: "Persian / English · bright, cheerful" },
+  { id: "Leda", label: "Leda · لدا (زن · جوان و شاداب)", description: "Persian / English · youthful, gentle" },
+  { id: "Orus", label: "Orus · اوروس (مرد · قاطع و مطمئن)", description: "Persian / English · firm, authoritative" },
+  { id: "Callirrhoe", label: "Callirrhoe · کالیرهو (زن · آرام و راحت)", description: "Persian / English · easy-going, calm" },
+  { id: "Autonoe", label: "Autonoe · آتونوئه (زن · روشن و واضح)", description: "Persian / English · bright, articulate" },
+  { id: "Enceladus", label: "Enceladus · انسلادوس (مرد · نرم و ملایم)", description: "Persian / English · breathy, soft" },
+  { id: "Iapetus", label: "Iapetus · یاپتوس (مرد · شفاف و گویا)", description: "Persian / English · clear, steady" },
+  { id: "Umbriel", label: "Umbriel · آمبریل (مرد · آرام و صمیمی)", description: "Persian / English · easy-going, smooth" },
+  { id: "Algieba", label: "Algieba · آلجیبا (مرد · نرم و روان)", description: "Persian / English · smooth, balanced" },
+  { id: "Despina", label: "Despina · دسپینا (زن · نرم و دلنشین)", description: "Persian / English · smooth, warm" },
+  { id: "Sulafat", label: "Sulafat · سولافات (زن · گرم و صمیمی)", description: "Persian / English · warm, expressive" },
 ];
 export const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/mpeg", "audio/flac"]);
 export type VoiceLanguage = "auto" | "fa" | "en";

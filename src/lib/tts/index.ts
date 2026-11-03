@@ -13,6 +13,16 @@ export interface SpeechSnapshot {
   error?: string;
 }
 
+export interface PlaybackDetails {
+  paused: boolean;
+  rate: number;
+  currentTime: number;
+  duration: number;
+  blockIndex: number;
+  totalBlocks: number;
+  canDownload: boolean;
+}
+
 interface SpeakOptions {
   voiceId?: string;
   botId?: string;
@@ -44,10 +54,89 @@ type TtsErrorBody = { error?: string };
 
 const IDLE: SpeechSnapshot = { status: "idle" };
 const PREFETCH_WINDOW = 3;
+const CLIENT_CACHE_TTL_MS = 12 * 3600 * 1000;
+const CLIENT_CACHE_MAX = 150;
+const clientBlobCache = new Map<string, { blob: Blob; ts: number }>();
+
+function getCachedBlob(key: string): Blob | null {
+  const entry = clientBlobCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CLIENT_CACHE_TTL_MS) {
+    clientBlobCache.delete(key);
+    return null;
+  }
+  return entry.blob;
+}
+
+function setCachedBlob(key: string, blob: Blob): void {
+  if (clientBlobCache.size >= CLIENT_CACHE_MAX) {
+    const oldest = clientBlobCache.keys().next().value;
+    if (oldest) clientBlobCache.delete(oldest);
+  }
+  clientBlobCache.set(key, { blob, ts: Date.now() });
+}
+
+export function clearClientTtsCache(): void {
+  clientBlobCache.clear();
+}
+
+export function mergeAudioBlobs(blobs: Blob[]): Blob {
+  if (blobs.length === 0) return new Blob([], { type: "audio/wav" });
+  if (blobs.length === 1) return blobs[0]!;
+  const mime = blobs[0]!.type || "audio/wav";
+  return new Blob(blobs, { type: mime });
+}
+
+export async function mergeWavOrAudioBlobs(blobs: Blob[]): Promise<Blob> {
+  if (blobs.length === 0) return new Blob([], { type: "audio/wav" });
+  if (blobs.length === 1) return blobs[0]!;
+  try {
+    const buffers = await Promise.all(blobs.map((b) => b.arrayBuffer()));
+    const views = buffers.map((b) => new Uint8Array(b));
+    const allWav = views.every(
+      (v) =>
+        v.byteLength >= 44 &&
+        v[0] === 0x52 && v[1] === 0x49 && v[2] === 0x46 && v[3] === 0x46 && // RIFF
+        v[8] === 0x57 && v[9] === 0x41 && v[10] === 0x56 && v[11] === 0x45, // WAVE
+    );
+    if (allWav) {
+      const pcmParts = views.map((v) => v.subarray(44));
+      const totalPcm = pcmParts.reduce((acc, p) => acc + p.byteLength, 0);
+      const out = new Uint8Array(44 + totalPcm);
+      out.set(views[0]!.subarray(0, 44), 0);
+      const dv = new DataView(out.buffer);
+      dv.setUint32(4, 36 + totalPcm, true);
+      dv.setUint32(40, totalPcm, true);
+      let offset = 44;
+      for (const p of pcmParts) {
+        out.set(p, offset);
+        offset += p.byteLength;
+      }
+      return new Blob([out], { type: "audio/wav" });
+    }
+  } catch { /* fall through */ }
+  return new Blob(blobs, { type: blobs[0]!.type || "audio/mpeg" });
+}
+
+const DEFAULT_PLAYBACK: PlaybackDetails = {
+  paused: false,
+  rate: 1,
+  currentTime: 0,
+  duration: 0,
+  blockIndex: 0,
+  totalBlocks: 0,
+  canDownload: false,
+};
 
 export class Speaker {
   private snapshot: SpeechSnapshot = IDLE;
   private watchers = new Set<(s: SpeechSnapshot) => void>();
+  private playback: PlaybackDetails = DEFAULT_PLAYBACK;
+  private playbackWatchers = new Set<(p: PlaybackDetails) => void>();
+  private ratePref = 1;
+  private activeBlobs: Blob[] = [];
+  private navRequest: { targetBlock: number; offsetSec?: number } | null = null;
+  private activeBlockControl: { currentIndex: () => number; total: () => number } | null = null;
   private token = 0;
   private audio: HTMLAudioElement | null = null;
   private objectUrl: string | null = null;
@@ -64,8 +153,18 @@ export class Speaker {
     return () => this.watchers.delete(fn);
   }
 
+  subscribePlayback(fn: (p: PlaybackDetails) => void): () => void {
+    this.playbackWatchers.add(fn);
+    fn(this.playback);
+    return () => this.playbackWatchers.delete(fn);
+  }
+
   get state(): SpeechSnapshot {
     return this.snapshot;
+  }
+
+  get playbackState(): PlaybackDetails {
+    return this.playback;
   }
 
   private set(next: SpeechSnapshot) {
@@ -73,13 +172,107 @@ export class Speaker {
     for (const watcher of Array.from(this.watchers)) watcher(next);
   }
 
+  private setPlayback(patch: Partial<PlaybackDetails>) {
+    this.playback = { ...this.playback, ...patch };
+    for (const watcher of Array.from(this.playbackWatchers)) watcher(this.playback);
+  }
+
   isSpeaking(messageId?: string): boolean {
     if (this.snapshot.status === "idle") return false;
     return messageId ? this.snapshot.messageId === messageId : true;
   }
 
+  isPaused(messageId?: string): boolean {
+    if (this.snapshot.status !== "speaking") return false;
+    if (messageId && this.snapshot.messageId !== messageId) return false;
+    return this.playback.paused;
+  }
+
+  pause(): void {
+    if (this.snapshot.status !== "speaking" || !this.audio) return;
+    this.audio.pause();
+    this.setPlayback({ paused: true, currentTime: this.audio.currentTime || 0 });
+  }
+
+  resume(): void {
+    if (this.snapshot.status !== "speaking" || !this.audio) return;
+    this.setPlayback({ paused: false });
+    void this.audio.play().catch(() => {});
+  }
+
+  togglePause(): void {
+    if (this.playback.paused) this.resume();
+    else this.pause();
+  }
+
+  setRate(rate: number): void {
+    const clamped = Math.max(0.5, Math.min(2.5, rate));
+    this.ratePref = clamped;
+    if (this.audio) {
+      try { this.audio.playbackRate = clamped; } catch { /* ignore */ }
+    }
+    this.setPlayback({ rate: clamped });
+  }
+
+  seek(seconds: number): void {
+    if (!this.audio) return;
+    const dur = Number.isFinite(this.audio.duration) && this.audio.duration > 0 ? this.audio.duration : 0;
+    const next = Math.max(0, dur > 0 ? Math.min(dur, seconds) : seconds);
+    try { this.audio.currentTime = next; } catch { /* ignore */ }
+    this.setPlayback({ currentTime: next });
+  }
+
+  skip(deltaSeconds: number): void {
+    if (!this.audio) return;
+    const cur = this.audio.currentTime || 0;
+    const dur = Number.isFinite(this.audio.duration) && this.audio.duration > 0 ? this.audio.duration : 0;
+    const target = cur + deltaSeconds;
+    const ctrl = this.activeBlockControl;
+    if (target < 0 && ctrl && ctrl.currentIndex() > 0 && this.settlePlayback) {
+      this.navRequest = { targetBlock: ctrl.currentIndex() - 1, offsetSec: -1 };
+      this.settlePlayback(true);
+      return;
+    }
+    if (dur > 0 && target >= dur && ctrl && ctrl.currentIndex() + 1 < ctrl.total() && this.settlePlayback) {
+      this.navRequest = { targetBlock: ctrl.currentIndex() + 1, offsetSec: 0 };
+      this.settlePlayback(true);
+      return;
+    }
+    this.seek(target);
+  }
+
+  jumpToBlock(blockIndex: number): void {
+    const ctrl = this.activeBlockControl;
+    if (!ctrl || !this.settlePlayback) return;
+    const clamped = Math.max(0, Math.min(ctrl.total() - 1, blockIndex));
+    this.navRequest = { targetBlock: clamped, offsetSec: 0 };
+    this.settlePlayback(true);
+  }
+
+  async downloadCurrentAudio(filenamePrefix = "openmausbot-voice"): Promise<boolean> {
+    if (!this.activeBlobs.length || typeof document === "undefined") return false;
+    const merged = await mergeWavOrAudioBlobs(this.activeBlobs);
+    const ext = merged.type.includes("wav") ? "wav" : "mp3";
+    const url = URL.createObjectURL(merged);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      const msgPart = this.snapshot.messageId ? `-${this.snapshot.messageId.slice(0, 8)}` : "";
+      a.download = `${filenamePrefix}${msgPart}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return true;
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  }
+
   stop() {
     this.token += 1;
+    this.navRequest = null;
+    this.activeBlockControl = null;
+    this.activeBlobs = [];
     const external = this.externalClaim;
     this.externalClaim = null;
     external?.pause();
@@ -93,6 +286,7 @@ export class Speaker {
     if (this.settlePlayback) this.settlePlayback(false);
     else this.teardownAudio();
     if (this.snapshot.status !== "idle" || this.snapshot.error) this.set(IDLE);
+    this.setPlayback({ ...DEFAULT_PLAYBACK, rate: this.ratePref });
   }
 
   claimExternalVoice(pause: () => void): () => void {

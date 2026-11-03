@@ -33,11 +33,14 @@ export function geminiLiveUrl(key: string): string {
   return `${GEMINI_LIVE_URL}?key=${encodeURIComponent(key)}`;
 }
 
-export function geminiLiveSetup(instruction: string): string {
+export function geminiLiveSetup(instruction: string, voiceName = "Kore"): string {
   return JSON.stringify({
     setup: {
       model: `models/${GEMINI_LIVE_MODEL}`,
-      generationConfig: { responseModalities: ["AUDIO"] },
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName || "Kore" } } },
+      },
       systemInstruction: { parts: [{ text: instruction }] },
       inputAudioTranscription: {},
       outputAudioTranscription: {},

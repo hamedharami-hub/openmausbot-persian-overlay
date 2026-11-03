@@ -60,7 +60,11 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
     if (!isSameOrigin(req)) return json(res, 403, { error: "forbidden: cross-origin request" });
     if (!auth.scopes.includes("client") && !auth.scopes.includes("admin")) return json(res, 403, { error: "forbidden" });
 
-    const threadId = new URL(req.url ?? "", "http://localhost").searchParams.get("threadId") ?? undefined;
+    const reqUrl = new URL(req.url ?? "", "http://localhost");
+    const threadId = reqUrl.searchParams.get("threadId") ?? undefined;
+    const requestedVoice = reqUrl.searchParams.get("voice") ?? undefined;
+    const cfg = deps.config();
+    const voiceName = requestedVoice || cfg.tts?.voice || "Kore";
     const instruction = geminiLiveInstruction(deps.subject(threadId));
     const upstream = deps.openSocket(geminiLiveUrl(key));
 
@@ -88,7 +92,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
       setupTimer.unref();
 
       upstream.onopen = () => {
-        try { upstream.send(geminiLiveSetup(instruction)); }
+        try { upstream.send(geminiLiveSetup(instruction, voiceName)); }
         catch { send({ kind: "error", message: "Could not start the Gemini Live session." }); finish("setup failed"); }
       };
       upstream.onmessage = (event) => {

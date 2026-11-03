@@ -6,6 +6,7 @@ export const LIVE_OUT_RATE = 24000;
 export interface GeminiLiveClientOptions {
   url: string;
   threadId?: string;
+  voice?: string;
   onEvent(event: LiveEvent): void;
   onStateChange?(state: "connecting" | "live" | "closed" | "error"): void;
   createSocket?(url: string): WebSocket;
@@ -55,8 +56,12 @@ export interface GeminiLiveSession {
  */
 export function openGeminiLiveConversation(options: GeminiLiveClientOptions): GeminiLiveSession {
   const socketFactory = options.createSocket ?? (() => new WebSocket(options.url));
-  const url = options.threadId
-    ? `${options.url}${options.url.includes("?") ? "&" : "?"}threadId=${encodeURIComponent(options.threadId)}`
+  const params = new URLSearchParams();
+  if (options.threadId) params.set("threadId", options.threadId);
+  if (options.voice) params.set("voice", options.voice);
+  const query = params.toString();
+  const url = query
+    ? `${options.url}${options.url.includes("?") ? "&" : "?"}${query}`
     : options.url;
   const socket = socketFactory(url);
   const state = options.onStateChange;

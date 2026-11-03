@@ -1008,7 +1008,7 @@ export function Composer({
           </>
         )}
         {!locked && geminiLiveAvailable && (
-          <GeminiLiveConversation threadId={bot?.threadId} className="flex-row items-center" />
+          <GeminiLiveConversation threadId={bot?.threadId} voiceId={bot?.voice || state.config?.tts?.voice} className="flex-row items-center" />
         )}
         {hasContent && !locked && (
           <button
