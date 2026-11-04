@@ -48,6 +48,9 @@ export function pcm16ToBytes(samples: Int16Array): Uint8Array {
 export interface GeminiLiveSession {
   close(): void;
   send(text: string): void;
+  interrupt(): void;
+  setMuted(muted: boolean): void;
+  isMuted(): boolean;
 }
 
 /**
@@ -73,6 +76,7 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
   let processor: ScriptProcessorNode | null = null;
   let closed = false;
   let ready = false;
+  let muted = false;
   let nextPlaybackTime = 0;
   const playing = new Set<AudioBufferSourceNode>();
 
@@ -132,8 +136,14 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     try { parsed = JSON.parse(event.data) as LiveEvent; } catch { return; }
     if (parsed.kind === "ready") { ready = true; state?.("live"); return; }
     if (parsed.kind === "audio") {
-      try { play(parsed.data, parsed.mimeType); }
-      catch { options.onEvent({ kind: "error", message: "Audio playback failed." }); close(); state?.("error"); }
+      try {
+        play(parsed.data, parsed.mimeType);
+        options.onEvent(parsed);
+      } catch {
+        options.onEvent({ kind: "error", message: "Audio playback failed." });
+        close();
+        state?.("error");
+      }
       return;
     }
     if (parsed.kind === "interrupted") stopPlayback();
@@ -154,12 +164,26 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     source = ctx.createMediaStreamSource(mic);
     processor = ctx.createScriptProcessor(4096, 1, 1);
     processor.onaudioprocess = (event) => {
-      if (closed || !ready || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 128 * 1024) return;
+      if (closed || !ready || muted || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 128 * 1024) return;
+      // Echo & self-interruption guard: While Gemini audio is actively queued or playing,
+      // do not stream microphone input to Gemini. This prevents speaker audio from being picked up
+      // by the microphone and triggering Gemini's Voice Activity Detection to cut off the answer.
+      const isSpeaking = playing.size > 0 || (nextPlaybackTime > 0 && ctx.currentTime < nextPlaybackTime + 0.15);
+      if (isSpeaking) return;
       const samples = downsampleTo16k(event.inputBuffer.getChannelData(0), ctx.sampleRate);
       socket.send(pcm16ToBytes(samples));
     };
     source.connect(processor);
-    processor.connect(ctx.destination);
+    // Connect processor through a zero-gain node so onaudioprocess fires reliably across all browsers,
+    // while completely preventing the raw microphone stream from being piped into the speakers.
+    const silentGain = typeof ctx.createGain === "function" ? ctx.createGain() : null;
+    if (silentGain) {
+      silentGain.gain.value = 0;
+      processor.connect(silentGain);
+      silentGain.connect(ctx.destination);
+    } else {
+      processor.connect(ctx.destination);
+    }
   };
 
   const opened = new Promise<void>((resolve, reject) => {
@@ -173,6 +197,15 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
     send(text: string) {
       // Text travels as a JSON envelope; audio travels as binary frames, so the server never guesses.
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "text", text }));
+    },
+    interrupt() {
+      stopPlayback();
+    },
+    setMuted(next: boolean) {
+      muted = Boolean(next);
+    },
+    isMuted() {
+      return muted;
     },
   };
 }

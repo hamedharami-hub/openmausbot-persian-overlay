@@ -1033,7 +1033,7 @@ export function Composer({
           </>
         )}
         {!locked && geminiLiveAvailable && (
-          <GeminiLiveConversation threadId={bot?.threadId} voiceId={bot?.voice || state.config?.tts?.voice} className="flex-row items-center" />
+          <GeminiLiveConversation botId={bot?.id} threadId={bot?.threadId} voiceId={bot?.voice || state.config?.tts?.voice} className="flex-row items-center" />
         )}
         {hasContent && !locked && (
           <button

@@ -218,12 +218,6 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, o
   const simple = !useAdvancedMode();
   const items: SidebarMenuItem[] = [
     { key: "attach", label: t("composer.attachFiles"), icon: <Paperclip size={16} />, onSelect: onAttach },
-    ...(onHoldCommands ? [{
-      key: "commands",
-      label: "منوی دستورات بات (/)",
-      icon: <Slash size={16} />,
-      onSelect: onHoldCommands,
-    } satisfies SidebarMenuItem] : []),
     ...(goal ? [{
       key: "goal",
       label: t(goal.solo ? "composer.goal.soloAria" : "composer.goal.aria"),

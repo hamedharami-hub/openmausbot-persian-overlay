@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Download, Loader2, Pause, Play, RotateCcw, RotateCw, Square, Volume2 } from "lucide-react";
 
-import { speaker } from "@/lib/tts";
+import { GEMINI_TTS_QUALITY_OPTIONS, speaker } from "@/lib/tts";
 import { useSpeech, useSpeechPlayback } from "@/lib/tts/useSpeech";
 import { cn } from "@/lib/cn";
 
@@ -126,6 +126,21 @@ export function MiniAudioPlayer({ className }: { className?: string }) {
       )}
 
       <div className="flex items-center gap-1">
+        <select
+          value={playback.ttsModel || "auto"}
+          onChange={(e) => speaker.setTtsModel(e.target.value)}
+          title="کیفیت و مدل خوانش گوگل (Gemini TTS Quality)"
+          aria-label="TTS quality model"
+          data-mini-tts-quality=""
+          className="max-w-[115px] truncate rounded-lg border border-hairline/50 bg-inset px-1.5 py-1 text-[10px] font-medium text-ink focus:outline-none hover:bg-raised"
+        >
+          {GEMINI_TTS_QUALITY_OPTIONS.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.badge} · {opt.id === "auto" ? "خودکار" : opt.id.replace("gemini-", "").replace("-preview", "")}
+            </option>
+          ))}
+        </select>
+
         <button
           type="button"
           onClick={cycleSpeed}

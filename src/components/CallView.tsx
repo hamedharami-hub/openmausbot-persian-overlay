@@ -504,6 +504,8 @@ function Call({ bot }: { bot: Bot }) {
   const phaseRef = useRef<Phase>(initialPhase);
   const alive = useRef(true);
   const sayGeneration = useRef(0);
+  const browserCleanupRef = useRef<(() => void) | null>(null);
+  const submitSpokenTextRef = useRef<(said: string) => void>(() => {});
 
   /** React state alone is too late: the helper can exit in the same tick as a final transcript or a mute. */
   const move = useCallback((next: Phase) => {
@@ -512,6 +514,10 @@ function Call({ bot }: { bot: Bot }) {
   }, []);
 
   const hush = useCallback(() => {
+    if (browserCleanupRef.current) {
+      browserCleanupRef.current();
+      browserCleanupRef.current = null;
+    }
     void window.ogb?.speechStop();
   }, []);
 
@@ -520,11 +526,152 @@ function Call({ bot }: { bot: Bot }) {
     move("listening");
     setHeard("");
     setNote(null);
-    void window.ogb?.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
-      if (alive.current && currentCall() === bot.id) {
-        setNote("The microphone couldn't start. Check Microphone and Speech Recognition access.");
+    if (window.ogb?.speechStart) {
+      void window.ogb.speechStart({ endpointMs: CALL_ENDPOINT_MS }).catch(() => {
+        if (alive.current && currentCall() === bot.id) {
+          setNote("The microphone couldn't start. Check Microphone and Speech Recognition access.");
+        }
+      });
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setNote("The microphone couldn't start. Check Microphone and Speech Recognition access.");
+      return;
+    }
+    if (browserCleanupRef.current) {
+      browserCleanupRef.current();
+      browserCleanupRef.current = null;
+    }
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let recorder: MediaRecorder | null = null;
+    let audioCtx: AudioContext | null = null;
+    let silenceTimer: ReturnType<typeof setInterval> | null = null;
+    let maxTimer: ReturnType<typeof setTimeout> | null = null;
+    let abortCtrl: AbortController | null = null;
+
+    const cleanup = () => {
+      cancelled = true;
+      if (silenceTimer) clearInterval(silenceTimer);
+      if (maxTimer) clearTimeout(maxTimer);
+      silenceTimer = null;
+      maxTimer = null;
+      abortCtrl?.abort();
+      abortCtrl = null;
+      if (recorder && recorder.state !== "inactive") {
+        try { recorder.stop(); } catch { /* ignore */ }
       }
-    });
+      recorder = null;
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      if (audioCtx) {
+        void audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
+    };
+    browserCleanupRef.current = cleanup;
+
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .then((media) => {
+        if (cancelled || !alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") {
+          media.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        stream = media;
+        const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
+        const capture = new MediaRecorder(media, mimeType ? { mimeType } : undefined);
+        recorder = capture;
+        const chunks: Blob[] = [];
+        let hasSpoken = false;
+        let lastVoiceAt = Date.now();
+        const startedAt = Date.now();
+
+        try {
+          audioCtx = new AudioContext();
+          const source = audioCtx.createMediaStreamSource(media);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          const buf = new Float32Array(analyser.fftSize);
+          silenceTimer = setInterval(() => {
+            if (cancelled || capture.state !== "recording") return;
+            analyser.getFloatTimeDomainData(buf);
+            let sum = 0;
+            for (let i = 0; i < buf.length; i++) sum += (buf[i] ?? 0) * (buf[i] ?? 0);
+            const rms = Math.sqrt(sum / buf.length);
+            const now = Date.now();
+            if (rms > 0.018) {
+              hasSpoken = true;
+              lastVoiceAt = now;
+              if (alive.current && phaseRef.current === "listening") {
+                setHeard("در حال دریافت صدای شما...");
+              }
+            } else if (hasSpoken && now - lastVoiceAt > CALL_ENDPOINT_MS + 150) {
+              try { capture.stop(); } catch { /* ignore */ }
+            } else if (!hasSpoken && now - startedAt > 12_000) {
+              try { capture.stop(); } catch { /* ignore */ }
+            }
+          }, 90);
+        } catch {
+          // If AudioContext analyser fails, fall back to maxTimer
+        }
+
+        capture.ondataavailable = (ev) => {
+          if (ev.data.size > 0) chunks.push(ev.data);
+        };
+        capture.onstop = async () => {
+          if (silenceTimer) clearInterval(silenceTimer);
+          if (maxTimer) clearTimeout(maxTimer);
+          stream?.getTracks().forEach((t) => t.stop());
+          stream = null;
+          if (audioCtx) {
+            void audioCtx.close().catch(() => {});
+            audioCtx = null;
+          }
+          if (cancelled || !alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") return;
+          if (!hasSpoken || chunks.length === 0) {
+            listen();
+            return;
+          }
+          const mime = capture.mimeType || chunks[0]?.type || "audio/webm";
+          setHeard("در حال تبدیل گفتار به متن (Gemini STT)...");
+          abortCtrl = new AbortController();
+          try {
+            const resp = await fetch("/api/gemini-voice/transcribe?language=auto", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": mime },
+              body: new Blob(chunks, { type: mime }),
+              signal: abortCtrl.signal,
+            });
+            if (!resp.ok) throw new Error("STT failed");
+            const data = (await resp.json()) as { text?: string };
+            if (cancelled || !alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") return;
+            const transcript = (data.text ?? "").trim();
+            if (!transcript) {
+              listen();
+              return;
+            }
+            setHeard(transcript);
+            submitSpokenTextRef.current(transcript);
+          } catch {
+            if (!cancelled && alive.current && currentCall() === bot.id && phaseRef.current === "listening") {
+              listen();
+            }
+          }
+        };
+        capture.start(250);
+        maxTimer = setTimeout(() => {
+          if (!cancelled && capture.state === "recording") {
+            try { capture.stop(); } catch { /* ignore */ }
+          }
+        }, 25_000);
+      })
+      .catch(() => {
+        if (!cancelled && alive.current && currentCall() === bot.id) {
+          setNote("The microphone couldn't start. Check Microphone and Speech Recognition access.");
+        }
+      });
   }, [bot.id, move]);
 
   const say = useCallback(
@@ -560,18 +707,8 @@ function Call({ bot }: { bot: Bot }) {
   }, [bot.id]);
 
   useEffect(() => {
-    const bridge = window.ogb;
-    if (!bridge) return;
-    const offTranscript = bridge.onSpeechTranscript((line) => {
-      if (!alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") return;
-      if (line.error) {
-        setNote("Dictation stopped unexpectedly. Check Microphone and Speech Recognition access.");
-        return;
-      }
-      if (typeof line.text !== "string") return;
-      setHeard(line.text);
-      if (line.partial !== false) return;
-      const said = line.text.trim();
+    const handleSpokenText = (rawText: string) => {
+      const said = rawText.trim();
       if (!said) return listen();
 
       const open = askedApproval.current;
@@ -632,6 +769,27 @@ function Call({ bot }: { bot: Bot }) {
 
       move("sending");
       dispatch({ type: "send", botId: bot.id, text: said, threadId: bot.threadId });
+    };
+    submitSpokenTextRef.current = handleSpokenText;
+
+    const bridge = window.ogb;
+    if (!bridge) {
+      if (bot.busy && !approval && !question) move("working");
+      else listen();
+      return () => {
+        hush();
+      };
+    }
+    const offTranscript = bridge.onSpeechTranscript((line) => {
+      if (!alive.current || currentCall() !== bot.id || phaseRef.current !== "listening") return;
+      if (line.error) {
+        setNote("Dictation stopped unexpectedly. Check Microphone and Speech Recognition access.");
+        return;
+      }
+      if (typeof line.text !== "string") return;
+      setHeard(line.text);
+      if (line.partial !== false) return;
+      handleSpokenText(line.text);
     });
     const offEnd = bridge.onSpeechEnd(({ code, reason }) => {
       if (!alive.current || currentCall() !== bot.id) return;
