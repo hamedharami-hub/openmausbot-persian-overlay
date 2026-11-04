@@ -7,6 +7,7 @@ export interface GeminiLiveClientOptions {
   url: string;
   threadId?: string;
   voice?: string;
+  model?: string;
   onEvent(event: LiveEvent): void;
   onStateChange?(state: "connecting" | "live" | "closed" | "error"): void;
   createSocket?(url: string): WebSocket;
@@ -62,6 +63,7 @@ export function openGeminiLiveConversation(options: GeminiLiveClientOptions): Ge
   const parts: string[] = [];
   if (options.threadId) parts.push(`threadId=${encodeURIComponent(options.threadId)}`);
   if (options.voice) parts.push(`voice=${encodeURIComponent(options.voice)}`);
+  if (options.model) parts.push(`model=${encodeURIComponent(options.model)}`);
   const query = parts.join("&");
   const url = query
     ? `${options.url}${options.url.includes("?") ? "&" : "?"}${query}`

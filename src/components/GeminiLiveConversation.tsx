@@ -20,6 +20,11 @@ const LIVE_VOICES = [
   { id: "Orus", label: "Orus · اوروس (مرد · قاطع)" },
 ];
 
+const LIVE_MODELS = [
+  { id: "gemini-3.8-live", label: "3.8 Live (مکالمه آنی)" },
+  { id: "gemini-3.8-live-extended-thinking", label: "3.8 Live Thinking (تفکر عمیق)" },
+];
+
 export function GeminiLiveConversation({
   botId,
   threadId,
@@ -39,6 +44,9 @@ export function GeminiLiveConversation({
   const [selectedVoice, setSelectedVoice] = useState<string>(() => {
     try { return localStorage.getItem("omb.geminiLiveVoice") || voiceId || "Kore"; } catch { return voiceId || "Kore"; }
   });
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    try { return localStorage.getItem("omb.geminiLiveModel") || "gemini-3.8-live"; } catch { return "gemini-3.8-live"; }
+  });
   const session = useRef<GeminiLiveSession | null>(null);
   const newTurnRef = useRef(true);
 
@@ -56,9 +64,10 @@ export function GeminiLiveConversation({
 
   useEffect(() => () => { session.current?.close(); session.current = null; }, []);
 
-  const start = useCallback((overrideVoice?: string) => {
+  const start = useCallback((overrideVoice?: string, overrideModel?: string) => {
     if (session.current) return;
     const useVoice = overrideVoice || selectedVoice || voiceId || "Kore";
+    const useModel = overrideModel || selectedModel || "gemini-3.8-live";
     setCaption("");
     setHeard("");
     setSpeaking(false);
@@ -70,6 +79,7 @@ export function GeminiLiveConversation({
       url: `${protocol}//${window.location.host}/api/gemini-live/conversation`,
       ...(threadId ? { threadId } : {}),
       voice: useVoice,
+      model: useModel,
       onStateChange: (state) => {
         setPhase(state === "live" ? "live" : state === "connecting" ? "connecting" : state === "error" ? "error" : "idle");
         if (state === "closed" || state === "error") {
@@ -95,20 +105,29 @@ export function GeminiLiveConversation({
               return `${prev}${sep}${event.text}`;
             });
           }
-        } else if (event.kind === "turnComplete" || event.kind === "interrupted") {
+        } else if (event.kind === "turn" || event.kind === "interrupted") {
           setSpeaking(false);
           newTurnRef.current = true;
         }
       },
     });
-  }, [threadId, selectedVoice, voiceId]);
+  }, [threadId, selectedVoice, selectedModel, voiceId]);
 
   const changeVoice = (next: string) => {
     setSelectedVoice(next);
     try { localStorage.setItem("omb.geminiLiveVoice", next); } catch { /* ignore */ }
     if (session.current) {
       stop();
-      setTimeout(() => start(next), 80);
+      setTimeout(() => start(next, selectedModel), 80);
+    }
+  };
+
+  const changeModel = (next: string) => {
+    setSelectedModel(next);
+    try { localStorage.setItem("omb.geminiLiveModel", next); } catch { /* ignore */ }
+    if (session.current) {
+      stop();
+      setTimeout(() => start(selectedVoice, next), 80);
     }
   };
 
@@ -136,23 +155,38 @@ export function GeminiLiveConversation({
     <div className={cn("pointer-events-auto relative flex flex-col gap-1.5", className)}>
       {live && (
         <div role="status" className="absolute bottom-full end-0 z-20 mb-3 flex max-h-64 w-80 max-w-[88vw] flex-col gap-2 overflow-y-auto rounded-2xl border border-hairline/40 bg-panel px-3.5 py-3 text-[13px] text-ink shadow-xl" dir="auto">
-          <div className="flex items-center justify-between gap-2 border-b border-hairline/30 pb-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium">
-              <span className={cn("size-2 rounded-full", speaking ? "animate-pulse bg-accent" : muted ? "bg-warning" : "bg-success")} />
-              <span className="text-ink-secondary">
-                {phase === "connecting" ? "در حال اتصال..." : speaking ? "جمینای در حال صحبت..." : muted ? "میکروفون بی‌صدا" : "در حال گوش دادن..."}
-              </span>
+          <div className="flex flex-col gap-1.5 border-b border-hairline/30 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium">
+                <span className={cn("size-2 rounded-full", speaking ? "animate-pulse bg-accent" : muted ? "bg-warning" : "bg-success")} />
+                <span className="text-ink-secondary">
+                  {phase === "connecting" ? "در حال اتصال..." : speaking ? "جمینای در حال صحبت..." : muted ? "میکروفون بی‌صدا" : "در حال گوش دادن..."}
+                </span>
+              </div>
+              <select
+                value={selectedModel}
+                onChange={(e) => changeModel(e.target.value)}
+                aria-label="Gemini Live Model"
+                className="rounded-md border border-hairline/50 bg-inset px-1.5 py-0.5 text-[10px] text-ink focus:outline-none"
+              >
+                {LIVE_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
             </div>
-            <select
-              value={selectedVoice}
-              onChange={(e) => changeVoice(e.target.value)}
-              aria-label="Gemini Live Voice"
-              className="rounded-md border border-hairline/50 bg-inset px-1.5 py-0.5 text-[11px] text-ink focus:outline-none"
-            >
-              {LIVE_VOICES.map((v) => (
-                <option key={v.id} value={v.id}>{v.label}</option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-ink-tertiary">صدای مکالمه:</span>
+              <select
+                value={selectedVoice}
+                onChange={(e) => changeVoice(e.target.value)}
+                aria-label="Gemini Live Voice"
+                className="rounded-md border border-hairline/50 bg-inset px-1.5 py-0.5 text-[11px] text-ink focus:outline-none"
+              >
+                {LIVE_VOICES.map((v) => (
+                  <option key={v.id} value={v.id}>{v.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
           {heard && (
             <div className="rounded-lg bg-inset/60 px-2 py-1 text-[12px] text-ink-secondary">

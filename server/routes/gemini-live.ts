@@ -63,6 +63,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
     const reqUrl = new URL(req.url ?? "", "http://localhost");
     const threadId = reqUrl.searchParams.get("threadId") ?? undefined;
     const requestedVoice = reqUrl.searchParams.get("voice") ?? undefined;
+    const requestedModel = reqUrl.searchParams.get("model") ?? undefined;
     const cfg = deps.config();
     const voiceName = requestedVoice || cfg.tts?.voice || "Kore";
     const instruction = geminiLiveInstruction(deps.subject(threadId));
@@ -92,7 +93,7 @@ export function createGeminiLiveRoutes(deps: GeminiLiveRouteDeps): RouteHandler 
       setupTimer.unref();
 
       upstream.onopen = () => {
-        try { upstream.send(geminiLiveSetup(instruction, voiceName)); }
+        try { upstream.send(geminiLiveSetup(instruction, voiceName, requestedModel)); }
         catch { send({ kind: "error", message: "Could not start the Gemini Live session." }); finish("setup failed"); }
       };
       upstream.onmessage = (event) => {

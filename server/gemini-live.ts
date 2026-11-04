@@ -1,6 +1,10 @@
 import type { AppConfig } from "./config.ts";
 
 export const GEMINI_LIVE_MODEL = "gemini-3.8-live";
+export const GEMINI_LIVE_MODELS = [
+  { id: "gemini-3.8-live", label: "Gemini 3.8 Live (مکالمه آنی)" },
+  { id: "gemini-3.8-live-extended-thinking", label: "Gemini 3.8 Live Extended Thinking (تفکر عمیق)" },
+] as const;
 export const GEMINI_LIVE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 export const LIVE_AUDIO_IN_RATE = 16000;
 export const LIVE_AUDIO_OUT_RATE = 24000;
@@ -33,10 +37,11 @@ export function geminiLiveUrl(key: string): string {
   return `${GEMINI_LIVE_URL}?key=${encodeURIComponent(key)}`;
 }
 
-export function geminiLiveSetup(instruction: string, voiceName = "Kore"): string {
+export function geminiLiveSetup(instruction: string, voiceName = "Kore", modelName = GEMINI_LIVE_MODEL): string {
+  const validModel = GEMINI_LIVE_MODELS.some((m) => m.id === modelName) ? modelName : GEMINI_LIVE_MODEL;
   return JSON.stringify({
     setup: {
-      model: `models/${GEMINI_LIVE_MODEL}`,
+      model: `models/${validModel}`,
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName || "Kore" } } },

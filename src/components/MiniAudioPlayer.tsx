@@ -136,7 +136,7 @@ export function MiniAudioPlayer({ className }: { className?: string }) {
         >
           {GEMINI_TTS_QUALITY_OPTIONS.map((opt) => (
             <option key={opt.id} value={opt.id}>
-              {opt.badge} · {opt.id === "auto" ? "خودکار" : opt.id.replace("gemini-", "").replace("-preview", "")}
+              {opt.shortLabel}
             </option>
           ))}
         </select>

@@ -26,11 +26,9 @@ export interface PlaybackDetails {
 
 export const GEMINI_TTS_QUALITY_OPTIONS = [
   { id: "auto", label: "خودکار هوشمند (سهمیه رایگان + چرخش)", shortLabel: "خودکار" },
-  { id: "gemini-3.8-flash-lite-tts", label: "اقتصادی · Flash 3.8 Lite (بیشترین سهمیه رایگان)", shortLabel: "Lite رایگان" },
-  { id: "gemini-3.1-flash-tts-preview", label: "استاندارد · Flash 3.1 TTS (کیفیت متعادل + رایگان)", shortLabel: "3.1 استاندارد" },
-  { id: "gemini-2.5-flash-preview-tts", label: "کلاسیک · Flash 2.5 TTS (سهمیه رایگان مجزا)", shortLabel: "2.5 کلاسیک" },
-  { id: "gemini-3.8-flash-tts", label: "کیفیت بالا · Flash 3.8 TTS (صدای طبیعی‌تر)", shortLabel: "3.8 کیفیت بالا" },
-  { id: "gemini-2.5-pro-preview-tts", label: "استودیویی · Pro 2.5 TTS (بالاترین کیفیت، سهمیه محدود)", shortLabel: "Pro استودیویی" },
+  { id: "gemini-3.8-flash-lite-tts", label: "سریع و اقتصادی · Gemini 3.8 Flash Lite TTS (بیشترین سهمیه رایگان)", shortLabel: "3.8 Lite (رایگان)" },
+  { id: "gemini-3.8-flash-tts", label: "کیفیت استودیویی · Gemini 3.8 Flash TTS (پرچم‌دار نسل ۳.۸)", shortLabel: "3.8 Flash (استودیویی)" },
+  { id: "gemini-3.1-flash-tts-preview", label: "استاندارد · Gemini 3.1 Flash TTS (سهمیه رایگان مکمل)", shortLabel: "3.1 استاندارد" },
 ] as const;
 
 interface SpeakOptions {
